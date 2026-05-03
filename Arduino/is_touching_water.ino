@@ -1,4 +1,4 @@
-int touchPin = 4; //A5 pin on ESP32
+int touchPin = 4; // A5 pin on ESP32
 int ledPin = 12; //12 pin on ESP32
 
 void setup() {
@@ -9,11 +9,13 @@ void setup() {
 void loop() {
   int touchValue = touchRead(touchPin);
 
-  if (touchValue < 500) { //capacitance threshold (can be calibrated)
+  if (touchValue < 500) { //  capacitance threshold (can be calibrated)
     digitalWrite(ledPin, HIGH);
+    //Serial.println(touchValue);
     Serial.println("1");
   } else {
     digitalWrite(ledPin, LOW);
+    //Serial.println(touchValue);
     Serial.println("0");
   }
 
