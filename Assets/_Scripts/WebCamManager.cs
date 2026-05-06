@@ -1,25 +1,31 @@
 using UnityEngine;
-using UnityEngine.UI;
 
 public class WebCamManager : MonoBehaviour
 {
-    [Header("Link to UserImage")]
-    public RawImage displayImage;
+    [Header("把刚刚创建的 WebCamBackground 拖到这里")]
+    public MeshRenderer backgroundQuad;
 
     private WebCamTexture webcamTexture;
 
     void Start()
     {
-        // Access Web Cam
+        // 获取摄像头设备
         WebCamDevice[] devices = WebCamTexture.devices;
 
         if (devices.Length > 0)
         {
-            // Link to the No.1 Camera by default
+            // 默认连接第一个摄像头
             webcamTexture = new WebCamTexture(devices[0].name);
-            displayImage.texture = webcamTexture;
+            
+            // 核心修改：把摄像头的画面赋值给 3D Quad 材质的主贴图
+            // 【核心修复】URP 材质必须通过 "_BaseMap" 接收贴图
+            backgroundQuad.material.SetTexture("_BaseMap", webcamTexture);
+
+            // 顺手补一句传统的，防止以后材质切回老管线
+            backgroundQuad.material.mainTexture = webcamTexture;
+            
             webcamTexture.Play();
-            Debug.Log("Camera Connect Successfuly��" + devices[0].name);
+            Debug.Log("Camera Connect Successfuly：" + devices[0].name);
         }
         else
         {
@@ -29,7 +35,7 @@ public class WebCamManager : MonoBehaviour
 
     void OnDestroy()
     {
-        // Turn off camera if exit
+        // 退出时关闭摄像头
         if (webcamTexture != null && webcamTexture.isPlaying)
         {
             webcamTexture.Stop();

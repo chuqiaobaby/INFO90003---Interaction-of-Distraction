@@ -103,18 +103,18 @@ public class DistractionManager : MonoBehaviour
 
     private void ReadHardwareInput()
     {
-        HardwareSimulator simulator = HardwareSimulator.Instance;
+        DeviceInputManager input = DeviceInputManager.Instance;
 
-        if (simulator == null)
+        if (input == null)
         {
             hardwareLevel = 0; isTouching = 0; isGrounding = 0; isBlowing = 0;
             return;
         }
 
-        hardwareLevel = Mathf.Clamp(simulator.Level, 0, 3);
-        isTouching = simulator.isTouching;
-        isGrounding = simulator.isGrounding;
-        isBlowing = simulator.isBlowing;
+        hardwareLevel = Mathf.Clamp(input.Level, 0, 3);
+        isTouching = input.isTouching;
+        isGrounding = input.isGrounding;
+        isBlowing = input.isBlowing;
     }
 
     private void UpdateWaterLevelEffect()

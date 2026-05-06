@@ -3,86 +3,102 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Placeholder VFX controller.
-/// All UI elements are auto-created at runtime — no Inspector drag-drop required.
-/// Inspector fields act as optional overrides if you want to supply your own objects.
+/// VFX controller.
+/// Touch effect = world-space Quad with LiquidGlassAnomaly shader.
+/// Other effects (color overlay, grounding border, camera shake, blow) are unchanged.
 /// </summary>
 public class PlaceholderVFXController : MonoBehaviour
 {
-    // ── Inspector References (all optional — auto-created if left empty) ───────
+    // ── UI References ─────────────────────────────────────────────────────────
 
-    [Header("UI References  [leave empty → auto-created at runtime]")]
-    [Tooltip("Full-screen color tint for water level. Auto-created if empty.")]
-    public Image colorOverlay;
-
-    [Tooltip("Centered white circle for touch flash. Auto-created if empty.")]
-    public Image flashOverlay;
-
-    [Tooltip("Full-screen horizontal-fill image for grounding border. Auto-created if empty.")]
-    public Image groundingBorder;
-
-    [Tooltip("CanvasGroup parent used for blow fade-out. Auto-created if empty.")]
+    [Header("UI References  [leave empty → auto-created]")]
+    public Image      colorOverlay;
+    public Image      groundingBorder;
     public CanvasGroup vfxGroup;
+    public Camera     mainCamera;
 
-    [Tooltip("Main Camera for Level 3 shake. Auto-detected (Camera.main) if empty.")]
-    public Camera mainCamera;
-
-    // ── Colors ─────────────────────────────────────────────────────────────────
+    // ── Water Level Colors ────────────────────────────────────────────────────
 
     [Header("Water Level Overlay Colors")]
-    public Color level1Color = new Color(0.00f, 0.50f, 1.00f, 0.15f); // Light blue
-    public Color level2Color = new Color(1.00f, 0.20f, 0.20f, 0.30f); // Medium red
-    public Color level3Color = new Color(1.00f, 0.05f, 0.05f, 0.55f); // Strong red
+    public Color level1Color = new Color(0.00f, 0.50f, 1.00f, 0.15f);
+    public Color level2Color = new Color(1.00f, 0.20f, 0.20f, 0.30f);
+    public Color level3Color = new Color(1.00f, 0.05f, 0.05f, 0.55f);
+
+    // ── Grounding Border Colors ───────────────────────────────────────────────
 
     [Header("Grounding Border Colors")]
-    public Color groundingColor = new Color(0.00f, 1.00f, 0.816f, 1.00f); // #00FFD0
-    public Color shieldedColor  = new Color(1.00f, 0.90f, 0.30f, 1.00f); // Gold
+    public Color groundingColor = new Color(0.00f, 1.00f, 0.816f, 1.00f);
+    public Color shieldedColor  = new Color(1.00f, 0.90f, 0.30f,  1.00f);
 
-    // ── Touch Circle ───────────────────────────────────────────────────────────
+    // ── Liquid Glass Touch Effect ─────────────────────────────────────────────
 
-    [Header("Touch Circle")]
-    [Tooltip("Peak alpha of the circle when touching")]
-    public float flashIntensity = 0.85f;
+    [Header("Touch Effect  —  Liquid Glass Anomaly")]
+    [Tooltip("Material using Custom/LiquidGlassAnomaly shader. " +
+             "Drag LiquidGlassAnomaly_Mat from the Project window here.")]
+    public Material liquidGlassMaterial;
 
-    [Tooltip("Diameter in pixels (auto-created circle only)")]
-    public float touchCircleDiameter = 200f;
+    [Tooltip("Size of the effect in screen pixels (width × height).")]
+    public Vector2 touchEffectPixelSize = new Vector2(380f, 380f);
 
-    [Tooltip("Fallback fade durations per level — used only when DistractionManager is absent")]
-    public float[] flashFadeByLevel = { 0.3f, 1.5f, 4.0f, 10.0f };
+    [Tooltip("Distance in front of the camera in metres (must be > Near Clip Plane).")]
+    public float touchEffectDepth = 2.0f;
 
-    // ── Camera Shake ───────────────────────────────────────────────────────────
+    [Tooltip("Screen edge margin for random spawn (0 = edge, 0.2 = 20% inset each side).")]
+    [Range(0f, 0.45f)]
+    public float touchEffectPadding = 0.18f;
+
+    [Tooltip("Peak opacity applied to the shader when a touch is first detected.")]
+    [Range(0f, 1f)]
+    public float touchGlassMaxOpacity = 0.95f;
+
+    // ── Camera Shake ──────────────────────────────────────────────────────────
 
     [Header("Camera Shake  (Level 3 only)")]
     public float shakeAmount = 4f;
     public float shakeSpeed  = 15f;
 
-    // ── Blow Fade ──────────────────────────────────────────────────────────────
+    // ── Blow Fade ─────────────────────────────────────────────────────────────
 
     [Header("Blow Fade-Out")]
     public float blowFadeDuration = 0.5f;
 
-    // ── Internal ───────────────────────────────────────────────────────────────
+    // ── Debug ─────────────────────────────────────────────────────────────────
+
+    [Header("Debug")]
+    [Tooltip("Shows a real-time status panel in the Game view during Play mode.")]
+    public bool showDebugOverlay = true;
+
+    // ── Internal ──────────────────────────────────────────────────────────────
 
     private enum VFXState { Normal, Grounding, Shielded }
     private VFXState vfxState = VFXState.Normal;
 
-    private HardwareSimulator hw;
+    private DeviceInputManager hw;
     private DistractionManager dm;
 
     private float groundingTimer    = 0f;
     private float groundingDuration = 5f;
     private float backtrackSpeed    = 1f;
 
-    private float   flashAlpha    = 0f;
     private Vector3 camOrigin;
     private bool    blowInProgress = false;
     private int     levelAtBlow    = -1;
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // Touch glass
+    private GameObject   touchGlassGO;
+    private MeshRenderer touchGlassMR;
+    private Material     touchGlassMat;
+    private float        touchGlassAlpha = 0f;
+    private int          prevIsTouching  = 0;
+
+    // Keyboard-fallback level (persists between frames when hw is null)
+    private int          _kbLevel        = 0;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     void Start()
     {
-        hw = HardwareSimulator.Instance;
+        hw = DeviceInputManager.Instance;
         dm = DistractionManager.Instance;
 
         if (dm != null)
@@ -92,9 +108,10 @@ public class PlaceholderVFXController : MonoBehaviour
         }
 
         if (mainCamera == null) mainCamera = Camera.main;
-        if (mainCamera != null) camOrigin = mainCamera.transform.localPosition;
+        if (mainCamera != null) camOrigin  = mainCamera.transform.localPosition;
 
         SetupUI();
+        SetupTouchGlass();
         ResetUI();
 
         if (groundingBorder != null)
@@ -104,12 +121,16 @@ public class PlaceholderVFXController : MonoBehaviour
             groundingBorder.fillOrigin = (int)Image.OriginHorizontal.Left;
             groundingBorder.fillAmount = 0f;
             groundingBorder.enabled    = false;
-            Debug.Log("[VFX] GroundingBorder type = " + groundingBorder.type
-                      + ", fillAmount = " + groundingBorder.fillAmount);
         }
     }
 
-    // ── UI Auto-Setup ─────────────────────────────────────────────────────────
+    void OnDestroy()
+    {
+        if (touchGlassMat != null) Destroy(touchGlassMat);
+        if (touchGlassGO  != null) Destroy(touchGlassGO);
+    }
+
+    // ── Canvas UI Setup ───────────────────────────────────────────────────────
 
     void SetupUI()
     {
@@ -126,21 +147,14 @@ public class PlaceholderVFXController : MonoBehaviour
         else
             ForceStretch(colorOverlay.rectTransform);
 
-        if (flashOverlay == null)
-            flashOverlay = BuildTouchCircle(root, "TouchCircle");
-
         if (groundingBorder == null)
             groundingBorder = BuildGroundingBorder(root, "GroundingBorder");
         else
         {
             SetProgressBarRect(groundingBorder.rectTransform);
-            
-            // 【关键修复】：如果是 Inspector 拖进来的 Image，确保它有 Sprite，否则 Filled 模式会失效
             if (groundingBorder.sprite == null)
-            {
-                groundingBorder.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), Vector2.zero);
-            }
-            
+                groundingBorder.sprite = Sprite.Create(
+                    Texture2D.whiteTexture, new Rect(0, 0, 4, 4), Vector2.zero);
             groundingBorder.type       = Image.Type.Filled;
             groundingBorder.fillMethod = Image.FillMethod.Horizontal;
             groundingBorder.fillOrigin = (int)Image.OriginHorizontal.Left;
@@ -148,7 +162,384 @@ public class PlaceholderVFXController : MonoBehaviour
         }
     }
 
-    // Finds a ScreenSpaceOverlay Canvas, or creates one.
+    // ── Liquid Glass Touch Effect Setup ───────────────────────────────────────
+
+    void SetupTouchGlass()
+    {
+        if (liquidGlassMaterial == null)
+        {
+            Debug.LogWarning("[VFX] Liquid Glass Material is NOT assigned! " +
+                             "Drag 'LiquidGlassAnomaly_Mat' from _Shader/ onto this component.");
+            return;
+        }
+
+        touchGlassGO = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        touchGlassGO.name = "TouchGlassEffect";
+        Destroy(touchGlassGO.GetComponent<MeshCollider>());
+
+        // Parent to camera so the Quad lives in the same render pass.
+        // This fixes invisibility caused by URP camera stacking (overlay cameras
+        // compositing on top of the base camera's transparent pass).
+        Camera setupCam = mainCamera != null ? mainCamera : Camera.main;
+        if (setupCam != null)
+            touchGlassGO.transform.SetParent(setupCam.transform, false);
+        else
+            Debug.LogWarning("[VFX] No camera found during setup — Quad is unparented.");
+
+        touchGlassMR = touchGlassGO.GetComponent<MeshRenderer>();
+        touchGlassMR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        touchGlassMR.receiveShadows    = false;
+
+        touchGlassMat         = new Material(liquidGlassMaterial);
+        touchGlassMR.material = touchGlassMat;
+
+        touchGlassMat.SetFloat("_Opacity", 0f);
+        touchGlassGO.SetActive(false);
+
+        Debug.Log("[VFX] TouchGlassEffect Quad created successfully.");
+    }
+
+    // ── Update ────────────────────────────────────────────────────────────────
+
+    void Update()
+    {
+        // ── Retry finding managers every frame until found ──────────────────
+        // Fixes the case where DeviceInputManager.Awake() runs after Start().
+        if (hw == null) hw = DeviceInputManager.Instance;
+        if (dm == null) dm = DistractionManager.Instance;
+
+        // Sync grounding params if dm just became available
+        if (dm != null && groundingDuration != dm.groundingDuration)
+        {
+            groundingDuration = dm.groundingDuration;
+            backtrackSpeed    = dm.backtrackSpeed;
+        }
+
+        if (blowInProgress) return;
+
+        // ── Read inputs ─────────────────────────────────────────────────────
+        // Primary: DeviceInputManager. Fallback: direct keyboard (keyboard mode
+        // works even if DeviceInputManager is missing from the scene, so you can
+        // always test by pressing Space).
+        int isTouching  = GetInputTouching();
+        int isGrounding = GetInputGrounding();
+        int isBlowing   = GetInputBlowing();
+        int level       = GetInputLevel();
+
+        TickStateMachine(isGrounding, isBlowing, level);
+
+        bool frozen = (vfxState == VFXState.Shielded);
+
+        if (!frozen) UpdateColorOverlay(level);
+        if (!frozen) UpdateTouchGlass(isTouching);
+        if (!frozen) UpdateCameraShake(level);
+
+        UpdateBorder();
+    }
+
+    // ── Input helpers (DeviceInputManager with keyboard fallback) ─────────────
+
+    int GetInputTouching()
+    {
+        if (hw != null) return hw.isTouching;
+        return Input.GetKey(KeyCode.Space) ? 1 : 0;
+    }
+
+    int GetInputGrounding()
+    {
+        if (hw != null) return hw.isGrounding;
+        return Input.GetKey(KeyCode.Return) ? 1 : 0;
+    }
+
+    int GetInputBlowing()
+    {
+        if (hw != null) return hw.isBlowing;
+        return Input.GetKeyDown(KeyCode.B) ? 1 : 0;
+    }
+
+    int GetInputLevel()
+    {
+        if (hw != null) return hw.Level;
+        // Keyboard fallback: level persists until a new key is pressed
+        if      (Input.GetKeyDown(KeyCode.Alpha0)) _kbLevel = 0;
+        else if (Input.GetKeyDown(KeyCode.Alpha1)) _kbLevel = 1;
+        else if (Input.GetKeyDown(KeyCode.Alpha2)) _kbLevel = 2;
+        else if (Input.GetKeyDown(KeyCode.Alpha3)) _kbLevel = 3;
+        return _kbLevel;
+    }
+
+    // ── State Machine ─────────────────────────────────────────────────────────
+
+    void TickStateMachine(int isGrounding, int isBlowing, int level)
+    {
+        switch (vfxState)
+        {
+            case VFXState.Normal:
+                if (isGrounding == 1) vfxState = VFXState.Grounding;
+                break;
+
+            case VFXState.Grounding:
+                float delta = isGrounding == 1
+                    ? Time.deltaTime
+                    : -backtrackSpeed * Time.deltaTime;
+
+                groundingTimer = Mathf.Clamp(groundingTimer + delta, 0f, groundingDuration);
+
+                if (groundingTimer >= groundingDuration)
+                    EnterShielded();
+                else if (groundingTimer <= 0f && isGrounding == 0)
+                    vfxState = VFXState.Normal;
+                break;
+
+            case VFXState.Shielded:
+                if (isBlowing == 1 && !blowInProgress)
+                {
+                    blowInProgress = true;
+                    levelAtBlow    = level;
+                    StartCoroutine(BlowRoutine());
+                }
+                break;
+        }
+    }
+
+    // ── Effect 1: Water Level Color Overlay ───────────────────────────────────
+
+    void UpdateColorOverlay(int level)
+    {
+        if (colorOverlay == null) return;
+
+        if (levelAtBlow >= 0)
+        {
+            if (level == levelAtBlow) { colorOverlay.color = Color.clear; return; }
+            else                        levelAtBlow = -1;
+        }
+
+        Color target;
+        switch (level)
+        {
+            case 1:  target = level1Color; break;
+            case 2:  target = level2Color; break;
+            case 3:  target = level3Color; break;
+            default: target = Color.clear; break;
+        }
+
+        colorOverlay.color = Color.Lerp(colorOverlay.color, target, Time.deltaTime * 5f);
+    }
+
+    // ── Effect 2: Liquid Glass Touch Effect ───────────────────────────────────
+    //
+    //  Timer logic (identical to the original white-circle flash):
+    //   • Rising edge of isTouching  → random screen position, opacity snaps to max
+    //   • While touching             → opacity held at max
+    //   • After release              → linear fade at dm.CurrentFadeTime rate
+    //     (starts fast at 1.5 s, grows to 180 s as globalDistractionTimer accumulates)
+
+    void UpdateTouchGlass(int isTouchingValue)
+    {
+        if (touchGlassGO == null || touchGlassMat == null) return;
+
+        bool touching     = (isTouchingValue == 1);
+        bool isRisingEdge = touching && (prevIsTouching == 0);
+        prevIsTouching    = isTouchingValue;
+
+        if (touching)
+        {
+            if (isRisingEdge) RandomizeTouchPosition();
+            touchGlassAlpha = touchGlassMaxOpacity;
+        }
+        else
+        {
+            float fadeTime   = (dm != null) ? dm.CurrentFadeTime : 1.5f;
+            float decaySpeed = touchGlassMaxOpacity / Mathf.Max(0.05f, fadeTime);
+            touchGlassAlpha  = Mathf.MoveTowards(touchGlassAlpha, 0f, decaySpeed * Time.deltaTime);
+        }
+
+        // Apply alpha to shader and toggle GameObject active state
+        touchGlassMat.SetFloat("_Opacity", touchGlassAlpha);
+        bool shouldBeActive = touchGlassAlpha > 0.004f;
+        if (touchGlassGO.activeSelf != shouldBeActive)
+            touchGlassGO.SetActive(shouldBeActive);
+    }
+
+    // Positions and scales the Quad at a random viewport location.
+    void RandomizeTouchPosition()
+    {
+        Camera cam = mainCamera != null ? mainCamera : Camera.main;
+        if (cam == null) { Debug.LogWarning("[VFX] No camera found for touch position."); return; }
+
+        float pad   = Mathf.Clamp(touchEffectPadding, 0f, 0.45f);
+        float vx    = Random.Range(pad, 1f - pad);
+        float vy    = Random.Range(pad, 1f - pad);
+        float depth = Mathf.Max(cam.nearClipPlane + 0.05f, touchEffectDepth);
+
+        // Convert desired pixel size → world-space size at 'depth'
+        float halfFovRad = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
+        float vpWorldH   = 2f * Mathf.Tan(halfFovRad) * depth;
+        float vpWorldW   = vpWorldH * cam.aspect;
+        float scaleX     = (touchEffectPixelSize.x / Screen.width)  * vpWorldW;
+        float scaleY     = (touchEffectPixelSize.y / Screen.height) * vpWorldH;
+
+        // Local-space placement (Quad is a child of the camera).
+        // (0, 0, depth) = straight ahead.  Offset by viewport fraction from centre.
+        float localX = (vx - 0.5f) * vpWorldW;
+        float localY = (vy - 0.5f) * vpWorldH;
+        touchGlassGO.transform.localPosition = new Vector3(localX, localY, depth);
+        touchGlassGO.transform.localRotation = Quaternion.identity;
+        touchGlassGO.transform.localScale    = new Vector3(scaleX, scaleY, 1f);
+
+        Vector3 worldPos = touchGlassGO.transform.position;
+        Debug.Log($"[VFX] Touch glass spawned at viewport ({vx:F2}, {vy:F2})  " +
+                  $"world {worldPos}  local ({localX:F3}, {localY:F3}, {depth:F3})  scale ({scaleX:F3}, {scaleY:F3})");
+    }
+
+    // ── Effect 3 / 4: Grounding Border ───────────────────────────────────────
+
+    void UpdateBorder()
+    {
+        if (groundingBorder == null) return;
+
+        if (vfxState == VFXState.Shielded)
+        {
+            groundingBorder.enabled    = true;
+            groundingBorder.fillAmount = 1f;
+            groundingBorder.color      = shieldedColor;
+            return;
+        }
+
+        float fill  = groundingDuration > 0f ? Mathf.Clamp01(groundingTimer / groundingDuration) : 0f;
+        bool  active = (vfxState == VFXState.Grounding) || (fill > 0.005f);
+        groundingBorder.enabled    = active;
+        groundingBorder.fillAmount = fill;
+        groundingBorder.color      = groundingColor;
+    }
+
+    // ── Effect 5: Camera Shake (Level 3) ─────────────────────────────────────
+
+    void UpdateCameraShake(int level)
+    {
+        if (mainCamera == null) return;
+
+        if (level == 3)
+        {
+            float t = Time.time * shakeSpeed;
+            mainCamera.transform.localPosition = camOrigin +
+                new Vector3(Mathf.Sin(t), Mathf.Cos(t * 1.3f), 0f) * (shakeAmount * 0.01f);
+        }
+        else
+        {
+            mainCamera.transform.localPosition = Vector3.Lerp(
+                mainCamera.transform.localPosition, camOrigin, Time.deltaTime * 10f);
+        }
+    }
+
+    // ── Shielded state ────────────────────────────────────────────────────────
+
+    void EnterShielded()
+    {
+        vfxState       = VFXState.Shielded;
+        groundingTimer = groundingDuration;
+        if (mainCamera != null) mainCamera.transform.localPosition = camOrigin;
+    }
+
+    // ── Blow: fade everything out ─────────────────────────────────────────────
+
+    IEnumerator BlowRoutine()
+    {
+        float elapsed         = 0f;
+        float startTouchAlpha = touchGlassAlpha;
+
+        if (vfxGroup != null)
+        {
+            while (elapsed < blowFadeDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = 1f - Mathf.Clamp01(elapsed / blowFadeDuration);
+                vfxGroup.alpha = t;
+
+                touchGlassAlpha = startTouchAlpha * t;
+                if (touchGlassMat != null) touchGlassMat.SetFloat("_Opacity", touchGlassAlpha);
+
+                yield return null;
+            }
+            vfxGroup.alpha = 0f;
+        }
+        else
+        {
+            Color startOverlay = colorOverlay    != null ? colorOverlay.color    : Color.clear;
+            Color startBorder  = groundingBorder != null ? groundingBorder.color : Color.clear;
+
+            while (elapsed < blowFadeDuration)
+            {
+                elapsed += Time.deltaTime;
+                float t = 1f - Mathf.Clamp01(elapsed / blowFadeDuration);
+
+                if (colorOverlay != null)
+                    colorOverlay.color = new Color(
+                        startOverlay.r, startOverlay.g, startOverlay.b, startOverlay.a * t);
+
+                if (groundingBorder != null)
+                    groundingBorder.color = new Color(
+                        startBorder.r, startBorder.g, startBorder.b, startBorder.a * t);
+
+                touchGlassAlpha = startTouchAlpha * t;
+                if (touchGlassMat != null) touchGlassMat.SetFloat("_Opacity", touchGlassAlpha);
+
+                yield return null;
+            }
+        }
+
+        HardReset();
+    }
+
+    // ── Debug Overlay ─────────────────────────────────────────────────────────
+
+    void OnGUI()
+    {
+        if (!showDebugOverlay) return;
+
+        // Semi-transparent background
+        GUI.color = new Color(0f, 0f, 0f, 0.55f);
+        GUI.DrawTexture(new Rect(8f, 8f, 280f, 210f), Texture2D.whiteTexture);
+        GUI.color = Color.white;
+
+        float y = 14f;
+        string hwStatus  = hw  != null ? "OK" : "NULL  ← check scene";
+        string dmStatus  = dm  != null ? "OK" : "NULL";
+        string matStatus = liquidGlassMaterial != null ? "assigned" : "MISSING  ← drag mat here!";
+        string parentName = (touchGlassGO != null && touchGlassGO.transform.parent != null)
+                           ? touchGlassGO.transform.parent.name : "NONE";
+        string goStatus  = touchGlassGO != null
+                           ? (touchGlassGO.activeSelf ? $"ACTIVE (parent={parentName})" : $"inactive (parent={parentName})")
+                           : "NULL  ← setup failed";
+
+        GUI.Label(new Rect(14f, y, 270f, 20f), "[VFXController]"); y += 20f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"DeviceInputManager : {hwStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"DistractionManager : {dmStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"LiquidGlassMaterial: {matStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"TouchGlassGO       : {goStatus}"); y += 18f;
+
+        int touch = GetInputTouching();
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"isTouching (input) : {touch}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"touchGlassAlpha    : {touchGlassAlpha:F3}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"VFX state          : {vfxState}"); y += 18f;
+
+        float camDepth = mainCamera != null ? mainCamera.farClipPlane : -1f;
+        string opaqTex = "enable Opaque Texture in URP Asset!";
+        GUI.color = Color.yellow;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"depth={touchEffectDepth:F1}  farClip={camDepth:F0}  {opaqTex}");
+        GUI.color = Color.white;
+        y += 18f;
+
+        if (hw == null)
+        {
+            GUI.color = Color.yellow;
+            GUI.Label(new Rect(14f, y, 270f, 20f), "Keyboard fallback active (no DeviceMgr)");
+            GUI.color = Color.white;
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     Canvas FindOrCreateCanvas()
     {
         foreach (Canvas c in FindObjectsOfType<Canvas>())
@@ -170,51 +561,25 @@ public class PlaceholderVFXController : MonoBehaviour
         return go.AddComponent<CanvasGroup>();
     }
 
-    // Full-screen Image stretched to fill parent.
     Image BuildFullScreenImage(GameObject parent, string objName, Color startColor)
     {
         GameObject go = new GameObject(objName);
         go.transform.SetParent(parent.transform, false);
-        Image img = go.AddComponent<Image>();
-        img.color = startColor;
+        Image img       = go.AddComponent<Image>();
+        img.color       = startColor;
         img.raycastTarget = false;
         ForceStretch(img.rectTransform);
         return img;
     }
 
-    // Centered circle using a procedurally generated 128×128 texture.
-    Image BuildTouchCircle(GameObject parent, string objName)
-    {
-        GameObject go = new GameObject(objName);
-        go.transform.SetParent(parent.transform, false);
-
-        Image img = go.AddComponent<Image>();
-        img.color = new Color(1f, 1f, 1f, 0f);
-        img.raycastTarget = false;
-        img.sprite = MakeCircleSprite(128);
-
-        RectTransform rt = img.rectTransform;
-        rt.anchorMin        = new Vector2(0.5f, 0.5f);
-        rt.anchorMax        = new Vector2(0.5f, 0.5f);
-        rt.pivot            = new Vector2(0.5f, 0.5f);
-        rt.anchoredPosition = Vector2.zero;
-        rt.sizeDelta        = new Vector2(touchCircleDiameter, touchCircleDiameter);
-
-        return img;
-    }
-
-    // Bottom-anchored progress bar (12 px tall, full screen width).
     Image BuildGroundingBorder(GameObject parent, string objName)
     {
         GameObject go = new GameObject(objName);
         go.transform.SetParent(parent.transform, false);
 
-        Image img = go.AddComponent<Image>();
-        
-        // 【关键修复】：给代码生成的 Image 也塞一张纯白贴图
+        Image img  = go.AddComponent<Image>();
         img.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), Vector2.zero);
-        
-        img.color = groundingColor;
+        img.color  = groundingColor;
         img.raycastTarget = false;
         img.type       = Image.Type.Filled;
         img.fillMethod = Image.FillMethod.Horizontal;
@@ -234,7 +599,6 @@ public class PlaceholderVFXController : MonoBehaviour
         rt.offsetMax = Vector2.zero;
     }
 
-    // Anchors the RectTransform to the bottom of the screen, 12 px tall.
     void SetProgressBarRect(RectTransform rt)
     {
         if (rt == null) return;
@@ -244,249 +608,9 @@ public class PlaceholderVFXController : MonoBehaviour
         rt.offsetMax = new Vector2(0f, 12f);
     }
 
-    // Generates a 128×128 circular sprite in code — no external assets needed.
-    Sprite MakeCircleSprite(int size)
-    {
-        Texture2D tex    = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        float     center = (size - 1) * 0.5f;
-        float     radius = center;
-        float     soft   = 2f; // pixel-wide anti-alias band at the edge
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                float dist  = Vector2.Distance(new Vector2(x, y), new Vector2(center, center));
-                float alpha = 1f - Mathf.Clamp01((dist - (radius - soft)) / soft);
-                tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
-            }
-        }
-
-        tex.Apply();
-        return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
-    }
-
-    // ── Update ────────────────────────────────────────────────────────────────
-
-    void Update()
-    {
-        if (hw == null || blowInProgress) return;
-
-        TickStateMachine();
-
-        bool frozen = (vfxState == VFXState.Shielded);
-
-        if (!frozen) UpdateColorOverlay();
-        if (!frozen) UpdateFlash();
-        if (!frozen) UpdateCameraShake();
-
-        UpdateBorder();
-    }
-
-    // ── State Machine ─────────────────────────────────────────────────────────
-
-    void TickStateMachine()
-    {
-        switch (vfxState)
-        {
-            case VFXState.Normal:
-                if (hw.isGrounding == 1) vfxState = VFXState.Grounding;
-                break;
-
-            case VFXState.Grounding:
-                float delta = hw.isGrounding == 1
-                    ? Time.deltaTime
-                    : -backtrackSpeed * Time.deltaTime;
-
-                groundingTimer = Mathf.Clamp(groundingTimer + delta, 0f, groundingDuration);
-
-                if (groundingTimer >= groundingDuration)
-                    EnterShielded();
-                else if (groundingTimer <= 0f && hw.isGrounding == 0)
-                    vfxState = VFXState.Normal;
-                break;
-
-            case VFXState.Shielded:
-                if (hw.isBlowing == 1 && !blowInProgress)
-                {
-                    blowInProgress = true;
-                    levelAtBlow = hw.Level; // 【关键修复】：记录吹气清除时的 Level，传给特效层进行拦截
-                    StartCoroutine(BlowRoutine());
-                }
-                break;
-        }
-    }
-
-
-    // ── Effect 1: Water Level Color Overlay ───────────────────────────────────
-
-    void UpdateColorOverlay()
-    {
-        if (colorOverlay == null) return;
-
-        // 【关键修复】：如果当前 Level 还是吹气时的那个 Level，强制保持全透明
-        if (levelAtBlow >= 0)
-        {
-            if (hw.Level == levelAtBlow)
-            {
-                colorOverlay.color = Color.clear; 
-                return;
-            }
-            else
-            {
-                levelAtBlow = -1; // 用户改变了 Level，解除锁定，恢复正常逻辑
-            }
-        }
-
-        Color target;
-        switch (hw.Level)
-        {
-            case 1:  target = level1Color; break;
-            case 2:  target = level2Color; break;
-            case 3:  target = level3Color; break;
-            default: target = Color.clear; break;
-        }
-
-        colorOverlay.color = Color.Lerp(colorOverlay.color, target, Time.deltaTime * 5f);
-    }
-
-    // ── Effect 2: Touch Circle Flash ──────────────────────────────────────────
-    // Completely independent of hw.Level — only isTouching drives the circle.
-
-    void UpdateFlash()
-    {
-        if (flashOverlay == null) return;
-
-        if (hw.isTouching == 1)
-        {
-            flashAlpha = flashIntensity;
-        }
-        else
-        {
-            // Fade speed comes from dm.CurrentFadeTime, which encodes run-time progression
-            // (fastFadeTimeAtStart=1.5s → slowFadeTimeAtEnd=180s via globalDistractionTimer).
-            // hw.Level has no effect here.
-            float fadeTime = (dm != null) ? dm.CurrentFadeTime : 1.5f;
-            float decaySpeed = flashIntensity / Mathf.Max(0.05f, fadeTime);
-            flashAlpha = Mathf.MoveTowards(flashAlpha, 0f, decaySpeed * Time.deltaTime);
-        }
-
-        Color c = flashOverlay.color;
-        c.a = flashAlpha;
-        flashOverlay.color = c;
-    }
-
-    // ── Effect 3 / 4: Grounding Border + Shielded color ───────────────────────
-    // fillAmount is assigned directly each frame so it tracks groundingTimer 1:1.
-    // Using Lerp/smoothing here caused the bar to appear to jump to full instantly
-    // because exponential smoothing reaches the target in just a few frames.
-
-    void UpdateBorder()
-    {
-        if (groundingBorder == null) return;
-
-        if (vfxState == VFXState.Shielded)
-        {
-            // Shielded: lock to full, gold color.
-            groundingBorder.enabled    = true;
-            groundingBorder.fillAmount = 1f;
-            groundingBorder.color      = shieldedColor;
-            return;
-        }
-
-        // Direct 1:1 mapping — bar exactly reflects timer progress every frame.
-        float fill = groundingDuration > 0f
-            ? Mathf.Clamp01(groundingTimer / groundingDuration)
-            : 0f;
-
-        bool active = (vfxState == VFXState.Grounding) || (fill > 0.005f);
-        groundingBorder.enabled    = active;
-        groundingBorder.fillAmount = fill;
-        Debug.Log("[VFX] fill = " + fill + ", timer = " + groundingTimer
-                  + " / " + groundingDuration);
-        groundingBorder.color      = groundingColor;
-    }
-
-    // ── Effect 1b: Level 3 Camera Shake ──────────────────────────────────────
-
-    void UpdateCameraShake()
-    {
-        if (mainCamera == null) return;
-
-        if (hw.Level == 3)
-        {
-            float t = Time.time * shakeSpeed;
-            mainCamera.transform.localPosition = camOrigin +
-                new Vector3(Mathf.Sin(t), Mathf.Cos(t * 1.3f), 0f) * (shakeAmount * 0.01f);
-        }
-        else
-        {
-            mainCamera.transform.localPosition = Vector3.Lerp(
-                mainCamera.transform.localPosition, camOrigin, Time.deltaTime * 10f);
-        }
-    }
-
-    // ── Shielded: freeze dynamic effects ─────────────────────────────────────
-
-    void EnterShielded()
-    {
-        vfxState       = VFXState.Shielded;
-        groundingTimer = groundingDuration;
-        if (mainCamera != null)
-            mainCamera.transform.localPosition = camOrigin;
-    }
-
-    // ── Blow: fade all VFX out, then reset ───────────────────────────────────
-
-    IEnumerator BlowRoutine()
-    {
-        float elapsed = 0f;
-
-        if (vfxGroup != null)
-        {
-            // Preferred: fade entire group via CanvasGroup alpha
-            while (elapsed < blowFadeDuration)
-            {
-                elapsed += Time.deltaTime;
-                vfxGroup.alpha = Mathf.Lerp(1f, 0f, elapsed / blowFadeDuration);
-                yield return null;
-            }
-            vfxGroup.alpha = 0f;
-        }
-        else
-        {
-            // Fallback: fade each image individually
-            Color startOverlay = colorOverlay   != null ? colorOverlay.color   : Color.clear;
-            Color startBorder  = groundingBorder != null ? groundingBorder.color : Color.clear;
-            float startFlash   = flashAlpha;
-
-            while (elapsed < blowFadeDuration)
-            {
-                elapsed += Time.deltaTime;
-                float t = 1f - Mathf.Clamp01(elapsed / blowFadeDuration);
-
-                if (colorOverlay != null)
-                    colorOverlay.color = new Color(startOverlay.r, startOverlay.g, startOverlay.b, startOverlay.a * t);
-
-                if (groundingBorder != null)
-                    groundingBorder.color = new Color(startBorder.r, startBorder.g, startBorder.b, startBorder.a * t);
-
-                flashAlpha = startFlash * t;
-                if (flashOverlay != null) { Color fc = flashOverlay.color; fc.a = flashAlpha; flashOverlay.color = fc; }
-
-                yield return null;
-            }
-        }
-
-        HardReset();
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
     void ResetUI()
     {
-        if (colorOverlay   != null) colorOverlay.color = Color.clear;
-        if (flashOverlay   != null) flashOverlay.color = new Color(1f, 1f, 1f, 0f);
+        if (colorOverlay    != null) colorOverlay.color = Color.clear;
         if (groundingBorder != null)
         {
             groundingBorder.fillAmount = 0f;
@@ -494,20 +618,22 @@ public class PlaceholderVFXController : MonoBehaviour
             groundingBorder.enabled    = false;
         }
         if (vfxGroup != null) vfxGroup.alpha = 1f;
+
+        touchGlassAlpha = 0f;
+        if (touchGlassMat != null) touchGlassMat.SetFloat("_Opacity", 0f);
+        if (touchGlassGO  != null) touchGlassGO.SetActive(false);
     }
 
     void HardReset()
     {
         vfxState       = VFXState.Normal;
         groundingTimer = 0f;
-        flashAlpha     = 0f;
+        prevIsTouching = 0;
 
         ResetUI();
 
-        if (mainCamera != null)
-            mainCamera.transform.localPosition = camOrigin;
-
-        if (vfxGroup != null) vfxGroup.alpha = 1f;
+        if (mainCamera != null) mainCamera.transform.localPosition = camOrigin;
+        if (vfxGroup   != null) vfxGroup.alpha = 1f;
 
         blowInProgress = false;
     }
