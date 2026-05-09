@@ -29,18 +29,22 @@ Material:
     - _ChromaStrength: 0.007
     - _CoreEmission: 0
     - _CoreRadius: 0.005
-    - _DistortionStrength: 0.045
-    - _FlowSpeed: 0.75
+    - _DistortionStrength: 0.103
+    - _FlowSpeed: 4.15
     - _FresnelPower: 8
     - _IriIntensity: 2.4
-    - _IriScale: 2.2
+    - _IriOffset: 0
+    - _IriScale: 3.68
     - _IriSpeed: 0.35
-    - _NoiseScale: 2.4
+    - _NoiseScale: 2.38
     - _Opacity: 0.93
-    - _RadialBias: 1.2
+    - _RadialBias: 1.51
+    - _ShapeIrregularity: 0
+    - _ShapeOffsetX: 0
+    - _ShapeOffsetY: 0
     - _TendrilGlow: 4.79
     - _TestMode: 0
-    - _WarpAmount: 4.5
+    - _WarpAmount: 4.08
     m_Colors:
     - _CoreColor: {r: 1.2, g: 0.9, b: 1, a: 1}
   m_BuildTextureStacks: []

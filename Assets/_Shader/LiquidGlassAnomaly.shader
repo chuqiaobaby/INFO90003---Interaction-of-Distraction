@@ -14,6 +14,7 @@
 //    • Thin-film iridescence: silver → cyan → magenta → gold palette
 //    • HDR core emission + tendril glow  (triggers Bloom in post-processing)
 //    • Fresnel rim drives iridescence weighting
+//    • Per-instance hue offset + irregular blob shape (set from C# per spawn)
 // ══════════════════════════════════════════════════════════════════════════════
 
 Shader "Custom/LiquidGlassAnomaly"
@@ -44,6 +45,16 @@ Shader "Custom/LiquidGlassAnomaly"
 
         [Space(6)][Header(Overall)]
         _Opacity            ("Opacity",               Range(0.0,  1.0)) = 0.93
+
+        [Space(6)][Header(Per Instance Variation  set from C#)]
+        // Offsets which segment of the iridescence palette this instance starts at.
+        // Range 0-1 covers the full silver-cyan-magenta-gold cycle once.
+        _IriOffset          ("Iridescence Hue Offset",  Range(0.0,  1.0)) = 0.0
+        // How much noise distorts the silhouette edge (0 = perfect circle).
+        _ShapeIrregularity  ("Shape Irregularity",       Range(0.0, 0.40)) = 0.0
+        // Seed for the boundary noise — unique per spawn gives unique blob shapes.
+        _ShapeOffsetX       ("Shape Noise Seed X",       Float) = 0.0
+        _ShapeOffsetY       ("Shape Noise Seed Y",       Float) = 0.0
 
         [Space(6)][Header(Diagnostic)]
         [Toggle] _TestMode  ("Test Mode (solid red — ignore all effects)", Float) = 0
@@ -93,6 +104,10 @@ Shader "Custom/LiquidGlassAnomaly"
                 float  _TendrilGlow;
                 float  _ChromaStrength;
                 float  _Opacity;
+                float  _IriOffset;
+                float  _ShapeIrregularity;
+                float  _ShapeOffsetX;
+                float  _ShapeOffsetY;
                 float  _TestMode;
             CBUFFER_END
 
@@ -134,7 +149,6 @@ Shader "Custom/LiquidGlassAnomaly"
             {
                 float2 i = floor(p);
                 float2 f = frac(p);
-                // Quintic smoothstep
                 float2 u = f * f * f * (f * (f * 6.0f - 15.0f) + 10.0f);
 
                 float a = dot(Hash22(i + float2(0.0f, 0.0f)), f - float2(0.0f, 0.0f));
@@ -147,10 +161,8 @@ Shader "Custom/LiquidGlassAnomaly"
             }
 
             // 4-octave FBM with per-octave rotation to eliminate axis-aligned banding.
-            // Rotation matrix: ~36.87° + 2× scale per octave.  Range ≈ [-0.94, 0.94]
             float FBM4(float2 p)
             {
-                // Row-major: row0=(1.6, 1.2)  row1=(-1.2, 1.6)
                 float2x2 M = float2x2(1.6f,  1.2f,
                                      -1.2f,  1.6f);
                 float v = 0.0f;
@@ -163,20 +175,15 @@ Shader "Custom/LiquidGlassAnomaly"
             }
 
             // ── Two-level domain warp (Inigo Quilez) ─────────────────────────
-            // Returns a 2D displacement vector in ≈ [-0.94, 0.94] per component.
-            // The double-warp creates spectacular, self-similar fluid swirls.
             float2 WarpedFlow(float2 uv, float t)
             {
                 float2 p = uv * _NoiseScale;
 
-                // Level-1: independent X/Y noise fields, slowly animated
                 float2 q = float2(
                     FBM4(p + float2( t * 0.11f,  t * 0.07f)),
                     FBM4(p + float2( 5.20f,  1.30f) + float2(t * 0.08f, -t * 0.09f))
                 );
 
-                // Level-2: p is displaced by _WarpAmount * q before sampling
-                // Different constant offsets keep x/y decorrelated
                 float2 r = float2(
                     FBM4(p + _WarpAmount * q + float2(1.70f + t * 0.150f,  9.20f + t * 0.100f)),
                     FBM4(p + _WarpAmount * q + float2(8.30f + t * 0.130f,  2.80f + t * 0.120f))
@@ -187,7 +194,7 @@ Shader "Custom/LiquidGlassAnomaly"
             // ══════════════════════════════════════════════════════════════════
             //  IRIDESCENCE PALETTE
             //  4-stop smooth gradient:  silver → cyan → magenta → gold → (loop)
-            //  Uses smoothstep for soft S-curve transitions at each stop.
+            //  _IriOffset shifts which colour a given instance starts at.
             // ══════════════════════════════════════════════════════════════════
             float3 IriPalette(float t)
             {
@@ -245,29 +252,31 @@ Shader "Custom/LiquidGlassAnomaly"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(IN);
 
-                // Diagnostic: enable "Test Mode" on the material → solid red-pink confirms
-                // the Quad geometry/layer/camera are all correct. Disable for production.
                 if (_TestMode > 0.5f) return half4(1.0f, 0.0f, 0.2f, 1.0f);
 
                 float2 uv = IN.uv;
                 float  t  = _Time.y * _FlowSpeed;
 
                 // ── Centre-relative coordinates ───────────────────────────────
-                float2 centred     = uv - 0.5f;
-                float  distCentre  = length(centred);
-                float2 radialDir   = distCentre > 1e-5f
-                                       ? centred / distCentre
-                                       : float2(0.0f, 1.0f);
+                float2 centred    = uv - 0.5f;
+                float  distCentre = length(centred);
+                float2 radialDir  = distCentre > 1e-5f
+                                      ? centred / distCentre
+                                      : float2(0.0f, 1.0f);
 
-                // ── Distortion vector  ────────────────────────────────────────
-                // Domain-warped noise gives the primary swirling fluid motion.
-                float2 warp = WarpedFlow(uv, t);  // range ≈ [-0.94, 0.94]
+                // ── Irregular silhouette ──────────────────────────────────────
+                // A low-frequency FBM sampled at a per-instance seed position
+                // pushes the radial distance outward/inward, turning the circle
+                // into an organic blob.  The core (coreMask) is left unaffected.
+                float2 shapeSeed = float2(_ShapeOffsetX, _ShapeOffsetY);
+                float  blobNoise = FBM4(uv * 2.5f + shapeSeed);  // ≈ [-0.94, 0.94]
+                float  distBlob  = distCentre + blobNoise * _ShapeIrregularity;
 
-                // Radial outward push: grows stronger towards the edge of the mesh
-                float radialW  = smoothstep(0.0f, 0.48f, distCentre) * _RadialBias;
+                // ── Distortion vector ─────────────────────────────────────────
+                float2 warp    = WarpedFlow(uv, t);
+                float  radialW = smoothstep(0.0f, 0.48f, distCentre) * _RadialBias;
                 float2 distort = (warp + radialDir * radialW) * _DistortionStrength;
 
-                // Fade distortion near UV border to avoid screen-edge artefacts
                 float edgeFade = smoothstep(0.0f, 0.07f, uv.x)
                                * smoothstep(0.0f, 0.07f, 1.0f - uv.x)
                                * smoothstep(0.0f, 0.07f, uv.y)
@@ -277,8 +286,7 @@ Shader "Custom/LiquidGlassAnomaly"
                 // ── Screen UVs ────────────────────────────────────────────────
                 float2 screenUV = IN.screenPos.xy / IN.screenPos.w;
 
-                // ── Chromatic aberration (RGB split along distortion axis) ─────
-                // Magnitude of the current distortion drives how wide the split is.
+                // ── Chromatic aberration ──────────────────────────────────────
                 float  chromaMag = saturate(length(distort) / max(_DistortionStrength * 0.5f, 1e-5f));
                 float2 chromaOff = radialDir * _ChromaStrength * chromaMag;
 
@@ -287,55 +295,44 @@ Shader "Custom/LiquidGlassAnomaly"
                 float  scB = SampleSceneColor(saturate(screenUV + distort - chromaOff)).b;
                 float3 refracted = float3(scR, scG, scB);
 
-                // ── Fresnel (N·V) ─────────────────────────────────────────────
+                // ── Fresnel ───────────────────────────────────────────────────
                 float3 N      = normalize(IN.normalWS);
                 float3 V      = normalize(IN.viewDirWS);
                 float  NdotV  = saturate(dot(N, V));
                 float  fresnel = pow(1.0f - NdotV, _FresnelPower);
 
                 // ── Iridescence noise ─────────────────────────────────────────
-                // A second, independently animated FBM layer drives colour cycling.
                 float  ti       = _Time.y * _IriSpeed;
                 float  iriNoise = FBM4(uv * _IriScale + float2(ti * 0.09f, -ti * 0.07f));
-                iriNoise = iriNoise * 0.5f + 0.5f;  // remap to [0, 1]
+                iriNoise = iriNoise * 0.5f + 0.5f;
 
-                // Thin-film iridescence parameter: Fresnel angle + noise + slow drift
-                float  iriT     = frac(iriNoise * 0.65f + fresnel * 0.35f + ti * 0.04f);
+                // _IriOffset shifts the starting hue for this instance
+                float  iriT     = frac(iriNoise * 0.65f + fresnel * 0.35f + ti * 0.04f + _IriOffset);
                 float3 iriColor = IriPalette(iriT) * _IriIntensity;
 
                 // ── Tendril mask ──────────────────────────────────────────────
-                // The magnitude of the warp field naturally traces the fluid tendrils:
-                // high where swirling is strongest, quiet where the flow is calm.
                 float tendrilM = saturate(length(warp) * 1.1f);
                 tendrilM       = pow(tendrilM, 1.1f);
-                // Suppress tendrils right at the mesh centre (core takes over there)
                 tendrilM      *= smoothstep(0.0f, _CoreRadius * 1.8f, distCentre);
 
                 // ── Colour composition ────────────────────────────────────────
+                float  iriBlend = saturate(tendrilM * 0.85f + fresnel * 0.45f);
+                float3 col      = lerp(refracted,
+                                       refracted * iriColor * 0.5f + iriColor * 0.3f,
+                                       iriBlend);
 
-                // Base: refracted background tinted by iridescence along tendrils
-                float iriBlend = saturate(tendrilM * 0.85f + fresnel * 0.45f);
-                float3 col     = lerp(refracted,
-                                      refracted * iriColor * 0.5f + iriColor * 0.3f,
-                                      iriBlend);
-
-                // HDR tendril glow: iridescent light emitted by the fluid itself
-                // Decays with distance so it concentrates near the centre
-                float tendrilEmit  = tendrilM
-                                   * saturate(1.0f - distCentre * 2.0f)
-                                   * _TendrilGlow;
+                float tendrilEmit = tendrilM
+                                  * saturate(1.0f - distCentre * 2.0f)
+                                  * _TendrilGlow;
                 col += iriColor * tendrilEmit;
 
-                // HDR core: blazing white-pink centre — key Bloom target
-                // Power curve gives a very tight, bright disc with a soft halo
+                // Core uses original distCentre so it is never clipped by blob noise
                 float coreMask = pow(saturate(1.0f - distCentre / _CoreRadius), 2.5f);
                 col += _CoreColor.rgb * _CoreEmission * coreMask;
 
-                // ── Alpha ─────────────────────────────────────────────────────
-                // Smooth circular fade from centre towards edge of mesh UVs
-                float radialAlpha = pow(saturate(1.0f - smoothstep(0.30f, 0.50f, distCentre)), 0.65f);
+                // ── Alpha — blob-distorted radial fade ────────────────────────
+                float radialAlpha = pow(saturate(1.0f - smoothstep(0.28f, 0.50f, distBlob)), 0.65f);
                 float alpha       = _Opacity * radialAlpha * edgeFade;
-                // Guarantee core emission is always visible regardless of opacity
                 alpha = max(alpha, coreMask * _Opacity);
                 alpha = saturate(alpha);
 

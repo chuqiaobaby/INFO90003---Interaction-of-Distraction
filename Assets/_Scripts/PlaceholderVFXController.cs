@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -84,15 +85,20 @@ public class PlaceholderVFXController : MonoBehaviour
     private bool    blowInProgress = false;
     private int     levelAtBlow    = -1;
 
-    // Touch glass
-    private GameObject   touchGlassGO;
-    private MeshRenderer touchGlassMR;
-    private Material     touchGlassMat;
-    private float        touchGlassAlpha = 0f;
-    private int          prevIsTouching  = 0;
+    // Per-instance data for each active touch glass effect
+    private class TouchGlassInstance
+    {
+        public GameObject go;
+        public Material   mat;
+        public float      alpha;
+        public float      fadeTime;
+    }
+    private readonly List<TouchGlassInstance> activeInstances = new List<TouchGlassInstance>();
+
+    private int prevIsTouching = 0;
 
     // Keyboard-fallback level (persists between frames when hw is null)
-    private int          _kbLevel        = 0;
+    private int _kbLevel = 0;
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -111,7 +117,6 @@ public class PlaceholderVFXController : MonoBehaviour
         if (mainCamera != null) camOrigin  = mainCamera.transform.localPosition;
 
         SetupUI();
-        SetupTouchGlass();
         ResetUI();
 
         if (groundingBorder != null)
@@ -122,12 +127,15 @@ public class PlaceholderVFXController : MonoBehaviour
             groundingBorder.fillAmount = 0f;
             groundingBorder.enabled    = false;
         }
+
+        if (liquidGlassMaterial == null)
+            Debug.LogWarning("[VFX] Liquid Glass Material is NOT assigned! " +
+                             "Drag 'LiquidGlassAnomaly_Mat' from _Shader/ onto this component.");
     }
 
     void OnDestroy()
     {
-        if (touchGlassMat != null) Destroy(touchGlassMat);
-        if (touchGlassGO  != null) Destroy(touchGlassGO);
+        DestroyAllInstances();
     }
 
     // ── Canvas UI Setup ───────────────────────────────────────────────────────
@@ -162,53 +170,13 @@ public class PlaceholderVFXController : MonoBehaviour
         }
     }
 
-    // ── Liquid Glass Touch Effect Setup ───────────────────────────────────────
-
-    void SetupTouchGlass()
-    {
-        if (liquidGlassMaterial == null)
-        {
-            Debug.LogWarning("[VFX] Liquid Glass Material is NOT assigned! " +
-                             "Drag 'LiquidGlassAnomaly_Mat' from _Shader/ onto this component.");
-            return;
-        }
-
-        touchGlassGO = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        touchGlassGO.name = "TouchGlassEffect";
-        Destroy(touchGlassGO.GetComponent<MeshCollider>());
-
-        // Parent to camera so the Quad lives in the same render pass.
-        // This fixes invisibility caused by URP camera stacking (overlay cameras
-        // compositing on top of the base camera's transparent pass).
-        Camera setupCam = mainCamera != null ? mainCamera : Camera.main;
-        if (setupCam != null)
-            touchGlassGO.transform.SetParent(setupCam.transform, false);
-        else
-            Debug.LogWarning("[VFX] No camera found during setup — Quad is unparented.");
-
-        touchGlassMR = touchGlassGO.GetComponent<MeshRenderer>();
-        touchGlassMR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        touchGlassMR.receiveShadows    = false;
-
-        touchGlassMat         = new Material(liquidGlassMaterial);
-        touchGlassMR.material = touchGlassMat;
-
-        touchGlassMat.SetFloat("_Opacity", 0f);
-        touchGlassGO.SetActive(false);
-
-        Debug.Log("[VFX] TouchGlassEffect Quad created successfully.");
-    }
-
     // ── Update ────────────────────────────────────────────────────────────────
 
     void Update()
     {
-        // ── Retry finding managers every frame until found ──────────────────
-        // Fixes the case where DeviceInputManager.Awake() runs after Start().
         if (hw == null) hw = DeviceInputManager.Instance;
         if (dm == null) dm = DistractionManager.Instance;
 
-        // Sync grounding params if dm just became available
         if (dm != null && groundingDuration != dm.groundingDuration)
         {
             groundingDuration = dm.groundingDuration;
@@ -217,10 +185,6 @@ public class PlaceholderVFXController : MonoBehaviour
 
         if (blowInProgress) return;
 
-        // ── Read inputs ─────────────────────────────────────────────────────
-        // Primary: DeviceInputManager. Fallback: direct keyboard (keyboard mode
-        // works even if DeviceInputManager is missing from the scene, so you can
-        // always test by pressing Space).
         int isTouching  = GetInputTouching();
         int isGrounding = GetInputGrounding();
         int isBlowing   = GetInputBlowing();
@@ -260,7 +224,6 @@ public class PlaceholderVFXController : MonoBehaviour
     int GetInputLevel()
     {
         if (hw != null) return hw.Level;
-        // Keyboard fallback: level persists until a new key is pressed
         if      (Input.GetKeyDown(KeyCode.Alpha0)) _kbLevel = 0;
         else if (Input.GetKeyDown(KeyCode.Alpha1)) _kbLevel = 1;
         else if (Input.GetKeyDown(KeyCode.Alpha2)) _kbLevel = 2;
@@ -328,68 +291,123 @@ public class PlaceholderVFXController : MonoBehaviour
 
     // ── Effect 2: Liquid Glass Touch Effect ───────────────────────────────────
     //
-    //  Timer logic (identical to the original white-circle flash):
-    //   • Rising edge of isTouching  → random screen position, opacity snaps to max
-    //   • While touching             → opacity held at max
-    //   • After release              → linear fade at dm.CurrentFadeTime rate
-    //     (starts fast at 1.5 s, grows to 180 s as globalDistractionTimer accumulates)
+    //  Each rising edge of isTouching spawns a brand-new Quad instance at a
+    //  random screen position.  Every instance captures dm.CurrentFadeTime at
+    //  the moment it is created and fades independently over that duration.
+    //  Old instances continue fading while new ones appear — no limit on count.
 
     void UpdateTouchGlass(int isTouchingValue)
     {
-        if (touchGlassGO == null || touchGlassMat == null) return;
-
         bool touching     = (isTouchingValue == 1);
         bool isRisingEdge = touching && (prevIsTouching == 0);
         prevIsTouching    = isTouchingValue;
 
-        if (touching)
-        {
-            if (isRisingEdge) RandomizeTouchPosition();
-            touchGlassAlpha = touchGlassMaxOpacity;
-        }
-        else
-        {
-            float fadeTime   = (dm != null) ? dm.CurrentFadeTime : 1.5f;
-            float decaySpeed = touchGlassMaxOpacity / Mathf.Max(0.05f, fadeTime);
-            touchGlassAlpha  = Mathf.MoveTowards(touchGlassAlpha, 0f, decaySpeed * Time.deltaTime);
-        }
+        if (isRisingEdge)
+            SpawnTouchGlassInstance();
 
-        // Apply alpha to shader and toggle GameObject active state
-        touchGlassMat.SetFloat("_Opacity", touchGlassAlpha);
-        bool shouldBeActive = touchGlassAlpha > 0.004f;
-        if (touchGlassGO.activeSelf != shouldBeActive)
-            touchGlassGO.SetActive(shouldBeActive);
+        // Tick every active instance independently
+        for (int i = activeInstances.Count - 1; i >= 0; i--)
+        {
+            TouchGlassInstance inst = activeInstances[i];
+
+            float decaySpeed = touchGlassMaxOpacity / Mathf.Max(0.05f, inst.fadeTime);
+            inst.alpha = Mathf.MoveTowards(inst.alpha, 0f, decaySpeed * Time.deltaTime);
+            inst.mat.SetFloat("_Opacity", inst.alpha);
+
+            if (inst.alpha <= 0.004f)
+            {
+                inst.go.SetActive(false);
+                Destroy(inst.mat);
+                Destroy(inst.go);
+                activeInstances.RemoveAt(i);
+            }
+        }
     }
 
-    // Positions and scales the Quad at a random viewport location.
-    void RandomizeTouchPosition()
+    void SpawnTouchGlassInstance()
     {
-        Camera cam = mainCamera != null ? mainCamera : Camera.main;
-        if (cam == null) { Debug.LogWarning("[VFX] No camera found for touch position."); return; }
+        if (liquidGlassMaterial == null) return;
 
+        Camera cam = mainCamera != null ? mainCamera : Camera.main;
+        if (cam == null) { Debug.LogWarning("[VFX] No camera found — cannot spawn touch glass."); return; }
+
+        // Build Quad
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = "TouchGlassEffect";
+        Destroy(go.GetComponent<MeshCollider>());
+        go.transform.SetParent(cam.transform, false);
+
+        MeshRenderer mr = go.GetComponent<MeshRenderer>();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows    = false;
+
+        Material mat = new Material(liquidGlassMaterial);
+        mr.material = mat;
+
+        // Random position within padded viewport
         float pad   = Mathf.Clamp(touchEffectPadding, 0f, 0.45f);
         float vx    = Random.Range(pad, 1f - pad);
         float vy    = Random.Range(pad, 1f - pad);
         float depth = Mathf.Max(cam.nearClipPlane + 0.05f, touchEffectDepth);
 
-        // Convert desired pixel size → world-space size at 'depth'
         float halfFovRad = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
         float vpWorldH   = 2f * Mathf.Tan(halfFovRad) * depth;
         float vpWorldW   = vpWorldH * cam.aspect;
         float scaleX     = (touchEffectPixelSize.x / Screen.width)  * vpWorldW;
         float scaleY     = (touchEffectPixelSize.y / Screen.height) * vpWorldH;
 
-        // Local-space placement (Quad is a child of the camera).
-        // (0, 0, depth) = straight ahead.  Offset by viewport fraction from centre.
         float localX = (vx - 0.5f) * vpWorldW;
         float localY = (vy - 0.5f) * vpWorldH;
-        touchGlassGO.transform.localPosition = new Vector3(localX, localY, depth);
-        touchGlassGO.transform.localRotation = Quaternion.identity;
-        touchGlassGO.transform.localScale    = new Vector3(scaleX, scaleY, 1f);
+        go.transform.localPosition = new Vector3(localX, localY, depth);
+        go.transform.localRotation = Quaternion.identity;
+        go.transform.localScale    = new Vector3(scaleX, scaleY, 1f);
 
-        Vector3 worldPos = touchGlassGO.transform.position;
-        Debug.Log($"[VFX] Touch glass spawned at viewport ({vx:F2}, {vy:F2})  " +
-                  $"world {worldPos}  local ({localX:F3}, {localY:F3}, {depth:F3})  scale ({scaleX:F3}, {scaleY:F3})");
+        // Capture fade duration at spawn time so each instance is independent
+        float fadeTime = (dm != null) ? dm.CurrentFadeTime : 1.5f;
+
+        // ── Per-instance visual randomisation ─────────────────────────────────
+        // Hue: shift each instance to a different segment of the iridescence cycle
+        mat.SetFloat("_IriOffset", Random.value);
+
+        // Shape: unique noise seed → unique organic blob silhouette each spawn
+        mat.SetFloat("_ShapeIrregularity", Random.Range(0.18f, 0.35f));
+        mat.SetFloat("_ShapeOffsetX",      Random.Range(0f, 100f));
+        mat.SetFloat("_ShapeOffsetY",      Random.Range(0f, 100f));
+
+        // Core colour: cycle through vivid HDR hues so simultaneous instances
+        // are visually distinct even without looking at the blob shape
+        Color[] coreHues =
+        {
+            new Color(3.0f, 0.4f, 0.1f, 1f),   // hot orange
+            new Color(0.1f, 2.5f, 0.5f, 1f),   // electric green
+            new Color(0.4f, 0.1f, 3.0f, 1f),   // deep violet
+            new Color(2.8f, 0.1f, 1.2f, 1f),   // magenta-pink
+            new Color(0.1f, 2.0f, 3.0f, 1f),   // electric cyan
+            new Color(3.0f, 2.2f, 0.1f, 1f),   // gold-yellow
+            new Color(0.1f, 0.8f, 2.8f, 1f),   // sky blue
+            new Color(2.5f, 0.1f, 0.5f, 1f),   // crimson
+        };
+        mat.SetColor("_CoreColor", coreHues[Random.Range(0, coreHues.Length)]);
+
+        // Extra variety: randomise glow energy so instances feel different in weight
+        mat.SetFloat("_IriIntensity", Random.Range(1.8f, 4.5f));
+        mat.SetFloat("_TendrilGlow",  Random.Range(1.2f, 4.5f));
+        mat.SetFloat("_CoreEmission", Random.Range(8f,  22f));
+        // ─────────────────────────────────────────────────────────────────────
+
+        mat.SetFloat("_Opacity", touchGlassMaxOpacity);
+        go.SetActive(true);
+
+        activeInstances.Add(new TouchGlassInstance
+        {
+            go       = go,
+            mat      = mat,
+            alpha    = touchGlassMaxOpacity,
+            fadeTime = fadeTime
+        });
+
+        Debug.Log($"[VFX] TouchGlass spawned at viewport ({vx:F2}, {vy:F2})  " +
+                  $"fadeTime={fadeTime:F1}s  active={activeInstances.Count}");
     }
 
     // ── Effect 3 / 4: Grounding Border ───────────────────────────────────────
@@ -445,8 +463,13 @@ public class PlaceholderVFXController : MonoBehaviour
 
     IEnumerator BlowRoutine()
     {
-        float elapsed         = 0f;
-        float startTouchAlpha = touchGlassAlpha;
+        float elapsed = 0f;
+
+        // Snapshot all instances alive at blow time
+        List<TouchGlassInstance> toFade = new List<TouchGlassInstance>(activeInstances);
+        float[] startAlphas = new float[toFade.Count];
+        for (int i = 0; i < toFade.Count; i++)
+            startAlphas[i] = toFade[i].alpha;
 
         if (vfxGroup != null)
         {
@@ -456,8 +479,14 @@ public class PlaceholderVFXController : MonoBehaviour
                 float t = 1f - Mathf.Clamp01(elapsed / blowFadeDuration);
                 vfxGroup.alpha = t;
 
-                touchGlassAlpha = startTouchAlpha * t;
-                if (touchGlassMat != null) touchGlassMat.SetFloat("_Opacity", touchGlassAlpha);
+                for (int i = 0; i < toFade.Count; i++)
+                {
+                    if (toFade[i].mat != null)
+                    {
+                        toFade[i].alpha = startAlphas[i] * t;
+                        toFade[i].mat.SetFloat("_Opacity", toFade[i].alpha);
+                    }
+                }
 
                 yield return null;
             }
@@ -481,8 +510,14 @@ public class PlaceholderVFXController : MonoBehaviour
                     groundingBorder.color = new Color(
                         startBorder.r, startBorder.g, startBorder.b, startBorder.a * t);
 
-                touchGlassAlpha = startTouchAlpha * t;
-                if (touchGlassMat != null) touchGlassMat.SetFloat("_Opacity", touchGlassAlpha);
+                for (int i = 0; i < toFade.Count; i++)
+                {
+                    if (toFade[i].mat != null)
+                    {
+                        toFade[i].alpha = startAlphas[i] * t;
+                        toFade[i].mat.SetFloat("_Opacity", toFade[i].alpha);
+                    }
+                }
 
                 yield return null;
             }
@@ -497,36 +532,31 @@ public class PlaceholderVFXController : MonoBehaviour
     {
         if (!showDebugOverlay) return;
 
-        // Semi-transparent background
         GUI.color = new Color(0f, 0f, 0f, 0.55f);
-        GUI.DrawTexture(new Rect(8f, 8f, 280f, 210f), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(8f, 8f, 280f, 230f), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
         float y = 14f;
         string hwStatus  = hw  != null ? "OK" : "NULL  ← check scene";
         string dmStatus  = dm  != null ? "OK" : "NULL";
         string matStatus = liquidGlassMaterial != null ? "assigned" : "MISSING  ← drag mat here!";
-        string parentName = (touchGlassGO != null && touchGlassGO.transform.parent != null)
-                           ? touchGlassGO.transform.parent.name : "NONE";
-        string goStatus  = touchGlassGO != null
-                           ? (touchGlassGO.activeSelf ? $"ACTIVE (parent={parentName})" : $"inactive (parent={parentName})")
-                           : "NULL  ← setup failed";
 
         GUI.Label(new Rect(14f, y, 270f, 20f), "[VFXController]"); y += 20f;
         GUI.Label(new Rect(14f, y, 270f, 20f), $"DeviceInputManager : {hwStatus}"); y += 18f;
         GUI.Label(new Rect(14f, y, 270f, 20f), $"DistractionManager : {dmStatus}"); y += 18f;
         GUI.Label(new Rect(14f, y, 270f, 20f), $"LiquidGlassMaterial: {matStatus}"); y += 18f;
-        GUI.Label(new Rect(14f, y, 270f, 20f), $"TouchGlassGO       : {goStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"Active instances   : {activeInstances.Count}"); y += 18f;
 
         int touch = GetInputTouching();
         GUI.Label(new Rect(14f, y, 270f, 20f), $"isTouching (input) : {touch}"); y += 18f;
-        GUI.Label(new Rect(14f, y, 270f, 20f), $"touchGlassAlpha    : {touchGlassAlpha:F3}"); y += 18f;
         GUI.Label(new Rect(14f, y, 270f, 20f), $"VFX state          : {vfxState}"); y += 18f;
 
+        float fadeTime = dm != null ? dm.CurrentFadeTime : 1.5f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"Current fadeTime   : {fadeTime:F1}s"); y += 18f;
+
         float camDepth = mainCamera != null ? mainCamera.farClipPlane : -1f;
-        string opaqTex = "enable Opaque Texture in URP Asset!";
         GUI.color = Color.yellow;
-        GUI.Label(new Rect(14f, y, 270f, 20f), $"depth={touchEffectDepth:F1}  farClip={camDepth:F0}  {opaqTex}");
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"depth={touchEffectDepth:F1}  farClip={camDepth:F0}  enable Opaque Texture!");
         GUI.color = Color.white;
         y += 18f;
 
@@ -539,6 +569,16 @@ public class PlaceholderVFXController : MonoBehaviour
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    void DestroyAllInstances()
+    {
+        foreach (TouchGlassInstance inst in activeInstances)
+        {
+            if (inst.mat != null) Destroy(inst.mat);
+            if (inst.go  != null) Destroy(inst.go);
+        }
+        activeInstances.Clear();
+    }
 
     Canvas FindOrCreateCanvas()
     {
@@ -565,8 +605,8 @@ public class PlaceholderVFXController : MonoBehaviour
     {
         GameObject go = new GameObject(objName);
         go.transform.SetParent(parent.transform, false);
-        Image img       = go.AddComponent<Image>();
-        img.color       = startColor;
+        Image img         = go.AddComponent<Image>();
+        img.color         = startColor;
         img.raycastTarget = false;
         ForceStretch(img.rectTransform);
         return img;
@@ -619,9 +659,7 @@ public class PlaceholderVFXController : MonoBehaviour
         }
         if (vfxGroup != null) vfxGroup.alpha = 1f;
 
-        touchGlassAlpha = 0f;
-        if (touchGlassMat != null) touchGlassMat.SetFloat("_Opacity", 0f);
-        if (touchGlassGO  != null) touchGlassGO.SetActive(false);
+        DestroyAllInstances();
     }
 
     void HardReset()
