@@ -17,8 +17,15 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField] private float cameraHeight = 5f;
     [SerializeField] private float projectionHeight = 0f;
 
+    [Header("Hand Tracking")]
+    [SerializeField] private bool useHandTrackingPosition = true;
+    [SerializeField] private bool useMousePositionWhenHandMissing = true;
+    [SerializeField] private float repeatRippleWhileTouching = 0.45f;
+
     private PastelClassicRippleController pastelProjection;
+    private HandTrackingUdpReceiver handTracking;
     private bool wasTouching;
+    private float lastRippleTime = -1000f;
 
     private void Start()
     {
@@ -27,6 +34,12 @@ public class ActivateProjector : MonoBehaviour
         if (createPastelProjection)
         {
             SetupPastelProjection();
+        }
+
+        handTracking = HandTrackingUdpReceiver.Instance;
+        if (handTracking == null)
+        {
+            handTracking = gameObject.AddComponent<HandTrackingUdpReceiver>();
         }
     }
 
@@ -39,13 +52,38 @@ public class ActivateProjector : MonoBehaviour
 
         DeviceInputManager input = DeviceInputManager.Instance;
         bool isTouching = input != null && input.isTouching == 1;
+        if (Application.isEditor && Input.GetKey(manualTriggerKey))
+        {
+            isTouching = true;
+        }
 
-        if (isTouching && !wasTouching)
+        bool canUseHandPosition = useHandTrackingPosition &&
+            handTracking != null &&
+            handTracking.HandVisible;
+        bool canUseMousePosition = useMousePositionWhenHandMissing &&
+            !canUseHandPosition &&
+            Application.isEditor;
+
+        if (isTouching && (canUseHandPosition || canUseMousePosition) && (!wasTouching || Time.time - lastRippleTime >= repeatRippleWhileTouching))
+        {
+            Vector2 ripplePosition = canUseHandPosition ? handTracking.NormalizedPosition : GetMouseNormalizedPosition();
+            pastelProjection.TriggerRipple(ripplePosition);
+            lastRippleTime = Time.time;
+        }
+        else if (isTouching && !wasTouching)
         {
             pastelProjection.TriggerRipple();
+            lastRippleTime = Time.time;
         }
 
         wasTouching = isTouching;
+    }
+
+    private Vector2 GetMouseNormalizedPosition()
+    {
+        float x = Screen.width > 0 ? Input.mousePosition.x / Screen.width : 0.5f;
+        float y = Screen.height > 0 ? Input.mousePosition.y / Screen.height : 0.5f;
+        return new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y));
     }
 
     private void ActivateDisplay(int displayIndex)
@@ -95,7 +133,7 @@ public class ActivateProjector : MonoBehaviour
         }
 
         pastelProjection.targetCamera = targetCamera;
-        pastelProjection.triggerKey = manualTriggerKey;
+        pastelProjection.triggerKey = KeyCode.None;
         pastelProjection.backgroundColor = backgroundColor;
         pastelProjection.strokeOpacity = strokeOpacity;
         pastelProjection.duration = rippleDuration;

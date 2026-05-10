@@ -7,7 +7,7 @@ public sealed class PastelClassicRippleController : MonoBehaviour
 {
     public Camera targetCamera;
     public KeyCode triggerKey = KeyCode.Space;
-    public Color backgroundColor = new Color(1f, 0.78f, 0.82f, 1f);
+    public Color backgroundColor = new Color(0f, 0f, 0f, 0f);
     [Range(0f, 2f)] public float strokeOpacity = 0.96f;
     [Range(0.2f, 4f)] public float duration = 2.2f;
     [Range(0.1f, 1.5f)] public float maxRadius = 0.86f;
@@ -21,6 +21,7 @@ public sealed class PastelClassicRippleController : MonoBehaviour
     private static readonly int DurationId = Shader.PropertyToID("_Duration");
     private static readonly int MaxRadiusId = Shader.PropertyToID("_MaxRadius");
     private static readonly int TriggerTimeId = Shader.PropertyToID("_TriggerTime");
+    private static readonly int RippleCenterId = Shader.PropertyToID("_RippleCenter");
     private static readonly int SeedId = Shader.PropertyToID("_Seed");
     private static readonly int GrainStrengthId = Shader.PropertyToID("_GrainStrength");
 
@@ -60,7 +61,16 @@ public sealed class PastelClassicRippleController : MonoBehaviour
     [ContextMenu("Trigger Ripple")]
     public void TriggerRipple()
     {
+        TriggerRipple(new Vector2(0.5f, 0.5f));
+    }
+
+    public void TriggerRipple(Vector2 normalizedPosition)
+    {
         EnsureSetup();
+        Vector2 clampedPosition = new Vector2(
+            Mathf.Clamp01(normalizedPosition.x),
+            Mathf.Clamp01(normalizedPosition.y));
+        materialInstance.SetVector(RippleCenterId, clampedPosition);
         materialInstance.SetFloat(TriggerTimeId, Application.isPlaying ? Time.time : Time.realtimeSinceStartup);
     }
 
@@ -82,6 +92,7 @@ public sealed class PastelClassicRippleController : MonoBehaviour
                 name = "Pastel Classic Ripple HLSL Material"
             };
             materialInstance.SetFloat(TriggerTimeId, -1000f);
+            materialInstance.SetVector(RippleCenterId, new Vector2(0.5f, 0.5f));
         }
 
         meshRenderer.sharedMaterial = materialInstance;

@@ -7,6 +7,7 @@ Shader "INFO90003/Pastel Classic Ripple HLSL"
         _Duration ("Duration", Float) = 2.2
         _MaxRadius ("Max Radius", Float) = 0.86
         _TriggerTime ("Trigger Time", Float) = -1000
+        _RippleCenter ("Ripple Center", Vector) = (0.5, 0.5, 0, 0)
         _Seed ("Seed", Float) = 90003
         _GrainStrength ("Grain Strength", Range(0, 1)) = 0.045
     }
@@ -48,6 +49,7 @@ Shader "INFO90003/Pastel Classic Ripple HLSL"
             float _Duration;
             float _MaxRadius;
             float _TriggerTime;
+            float4 _RippleCenter;
             float _Seed;
             float _GrainStrength;
 
@@ -161,7 +163,9 @@ Shader "INFO90003/Pastel Classic Ripple HLSL"
             {
                 float2 uv = i.uv;
                 float aspect = max(_ScreenParams.x / max(_ScreenParams.y, 1.0), 1.0);
-                float2 p = float2((uv.x * 2.0 - 1.0) * aspect, uv.y * 2.0 - 1.0);
+                float2 center = saturate(_RippleCenter.xy);
+                float2 centerP = float2((center.x * 2.0 - 1.0) * aspect, center.y * 2.0 - 1.0);
+                float2 p = float2((uv.x * 2.0 - 1.0) * aspect, uv.y * 2.0 - 1.0) - centerP;
 
                 float grain = (hash21(floor(uv * _ScreenParams.xy * 0.8)) - 0.5) * _GrainStrength;
                 float backgroundAlpha = saturate(_BackgroundColor.a);
