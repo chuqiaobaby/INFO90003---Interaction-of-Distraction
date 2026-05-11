@@ -31,6 +31,9 @@ public class DeviceInputManager : MonoBehaviour
     public string portName = "COM3";
     public int baudRate = 115200;
 
+    [Header("Debug")]
+    [SerializeField] private bool showDebugOverlay = false;
+
     [Header("Current Values  (Read Only)")]
     public int Level      = 0;
     public int isTouching = 0;
@@ -182,6 +185,8 @@ public class DeviceInputManager : MonoBehaviour
     // ── Debug overlay ─────────────────────────────────────────────────
     private void OnGUI()
     {
+        if (!showDebugOverlay) return;
+
         string source = useHardwareInput
             ? (_running ? $"Hardware  {portName}" : $"Hardware  {portName}  (ERROR — check Console)")
             : "Keyboard";

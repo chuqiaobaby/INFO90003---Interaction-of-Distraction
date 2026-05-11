@@ -298,7 +298,7 @@ Camera:
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 119
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 0
@@ -543,7 +543,7 @@ MonoBehaviour:
   shakeAmount: 4
   shakeSpeed: 15
   blowFadeDuration: 0.5
-  showDebugOverlay: 1
+  showDebugOverlay: 0
 --- !u!4 &536995484
 Transform:
   m_ObjectHideFlags: 0
@@ -684,7 +684,7 @@ GameObject:
   m_Component:
   - component: {fileID: 765055270}
   - component: {fileID: 765055269}
-  m_Layer: 0
+  m_Layer: 7
   m_Name: ProjectorManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -703,6 +703,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 86225077583d78b489b1b10c57131f1c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ActivateProjector
+  projectorDisplayIndex: 1
+  projectorCamera: {fileID: 0}
+  createPastelProjection: 1
+  manualTriggerKey: 32
+  backgroundColor: {r: 0, g: 0, b: 0, a: 0}
+  strokeOpacity: 0.96
+  rippleDuration: 2.2
+  maxRippleRadius: 0.86
+  grainStrength: 0.045
+  cameraHeight: 5
+  projectionHeight: 0
+  useHandTrackingPosition: 1
+  useMousePositionWhenHandMissing: 1
+  repeatRippleWhileTouching: 0.45
 --- !u!4 &765055270
 Transform:
   m_ObjectHideFlags: 0
@@ -877,7 +891,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 183
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 1
