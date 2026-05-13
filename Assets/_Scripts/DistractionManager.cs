@@ -14,8 +14,8 @@ public class DistractionManager : MonoBehaviour
 
     public static DistractionManager Instance { get; private set; }
 
-    // Read-only accessor used by PlaceholderVFXController to sync flash fade speed.
     public float CurrentFadeTime => currentFadeTime;
+    public bool IsShielded => currentState == SystemState.Shielded;
 
     [Header("--- Shader Properties (MUST MATCH SHADER GRAPH) ---")]
     public Material faceMaterial;
