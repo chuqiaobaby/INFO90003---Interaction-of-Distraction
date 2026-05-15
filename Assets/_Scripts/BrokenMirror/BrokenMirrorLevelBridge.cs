@@ -14,9 +14,13 @@ public sealed class BrokenMirrorLevelBridge : MonoBehaviour
 {
     [SerializeField] private MirrorFractureController mirrorFractureController;
 
-    private int  _lastLevel   = -1;
-    private bool _wasBlowing  = false;
-    private bool _wasShielded = false;
+    private int  _lastLevel         = -1;
+    private bool _wasBlowing        = false;
+    private bool _wasShielded       = false;
+    // After a successful blow, block level-driven re-cracking until Level returns to 0.
+    // This lets staff physically remove objects from the water without the mirror
+    // re-cracking as the level drops 3→2→1→0 between users.
+    private bool _awaitingLevelReset = false;
 
     private void Update()
     {
@@ -37,13 +41,26 @@ public sealed class BrokenMirrorLevelBridge : MonoBehaviour
         if (blowRisingEdge && _wasShielded)
         {
             mirrorFractureController.ResetMirror();
-            _lastLevel = level; // prevent same-frame re-crack
-            _wasShielded = false;
+            _lastLevel           = level;
+            _wasShielded         = false;
+            _awaitingLevelReset  = (level > 0); // wait for staff to drain water back to 0
             return;
         }
 
         // Cache shielded state for next frame's blow check
         _wasShielded = shieldedNow;
+
+        // While waiting for the water level to physically return to 0 (staff removing
+        // objects between users), ignore level changes so the mirror stays clean.
+        if (_awaitingLevelReset)
+        {
+            if (level == 0)
+            {
+                _awaitingLevelReset = false;
+                _lastLevel          = 0;
+            }
+            return;
+        }
 
         // Drive mirror state from water level
         if (level != _lastLevel)

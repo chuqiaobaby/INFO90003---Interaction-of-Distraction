@@ -15,7 +15,8 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
         _Instability ("Reflection Instability", Range(0, 1)) = 0
         _Darken ("Mirror Darken", Range(0, 1)) = 0
         _Contrast ("Reflection Contrast", Range(0.5, 2)) = 1
-        _FlipX ("Flip Webcam X", Float) = 1
+        _FlipX ("Flip Webcam X", Float) = 0
+        _FlipY ("Flip Webcam Y", Float) = 0
     }
 
     SubShader
@@ -53,6 +54,7 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
             half _Darken;
             half _Contrast;
             half _FlipX;
+            half _FlipY;
 
             struct Attributes
             {
@@ -95,10 +97,8 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
             half3 WebcamSample(float2 uv)
             {
                 uv = saturate(uv);
-                if (_FlipX > 0.5)
-                {
-                    uv.x = 1.0 - uv.x;
-                }
+                if (_FlipX > 0.5) uv.x = 1.0 - uv.x;
+                if (_FlipY > 0.5) uv.y = 1.0 - uv.y;
                 return tex2D(_WebcamTex, uv).rgb;
             }
 

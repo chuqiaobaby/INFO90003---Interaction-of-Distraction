@@ -11,11 +11,17 @@ using UnityEngine;
 ///   "waterLevel,isTouching,isGrounding,isBlowing\n"
 ///   e.g. "2,1,0,0" — baud 115200
 ///
-/// Keyboard fallback controls (same as HardwareSimulator):
+/// Keyboard fallback controls:
 ///   0-3       → water level
 ///   Space     → hold to touch
 ///   Enter     → hold to ground
-///   B         → one-frame blow pulse
+///   B         → blow pulse
+///
+/// Blow debounce (hardware mode only):
+///   The raw sensor signal must read 1 for BlowConfirmFrames consecutive Unity frames
+///   before a blow is confirmed. After confirmation, BlowCooldownSeconds must elapse
+///   before the next blow can be registered. This prevents accidental triggers from
+///   talking, movement, or sensor noise.
 /// </summary>
 public class DeviceInputManager : MonoBehaviour
 {
@@ -30,6 +36,12 @@ public class DeviceInputManager : MonoBehaviour
     [Tooltip("Windows: COM3, COM4 …   macOS/Linux: /dev/ttyUSB0, /dev/cu.usbmodem… ")]
     public string portName = "COM3";
     public int baudRate = 115200;
+
+    [Header("Blow Debounce  (Hardware Mode Only)")]
+    [Tooltip("Consecutive Unity frames the sensor must read 1 before a blow is confirmed")]
+    [SerializeField] private int blowConfirmFrames = 3;
+    [Tooltip("Seconds before another blow can be confirmed — prevents repeated triggers")]
+    [SerializeField] private float blowCooldownSeconds = 2f;
 
     [Header("Debug")]
     [SerializeField] private bool showDebugOverlay = false;
@@ -53,6 +65,14 @@ public class DeviceInputManager : MonoBehaviour
 
     // Track whether hardware mode was active so we can react to runtime toggling
     private bool _wasHardwareActive;
+
+    // Blow pulse: keeps isBlowing=1 for 2 updates so all scripts catch it
+    // regardless of script execution order.
+    private int _blowFramesLeft;
+
+    // Hardware blow debounce state
+    private int   _blowConsecutiveCount;
+    private float _blowCooldownTimer;
 
     // ── Unity lifecycle ──────────────────────────────────────────────
     private void Awake()
@@ -83,6 +103,10 @@ public class DeviceInputManager : MonoBehaviour
             PollSerial();
         else
             PollKeyboard();
+
+        // Unified blow output for both modes: emit a 2-frame pulse then go back to 0
+        isBlowing = _blowFramesLeft > 0 ? 1 : 0;
+        if (_blowFramesLeft > 0) _blowFramesLeft--;
     }
 
     // ── Keyboard fallback ────────────────────────────────────────────
@@ -93,9 +117,11 @@ public class DeviceInputManager : MonoBehaviour
         else if (Input.GetKeyDown(KeyCode.Alpha2)) Level = 2;
         else if (Input.GetKeyDown(KeyCode.Alpha3)) Level = 3;
 
-        isTouching  = Input.GetKey(KeyCode.Space)      ? 1 : 0;
-        isGrounding = Input.GetKey(KeyCode.Return)      ? 1 : 0;
-        isBlowing   = Input.GetKeyDown(KeyCode.B)       ? 1 : 0;
+        isTouching  = Input.GetKey(KeyCode.Space)  ? 1 : 0;
+        isGrounding = Input.GetKey(KeyCode.Return)  ? 1 : 0;
+
+        if (Input.GetKeyDown(KeyCode.B))
+            _blowFramesLeft = 2;
     }
 
     // ── Serial polling (main thread) ─────────────────────────────────
@@ -104,7 +130,28 @@ public class DeviceInputManager : MonoBehaviour
         Level       = _stageLevel;
         isTouching  = _stageTouching;
         isGrounding = _stageGrounding;
-        isBlowing   = _stageBlowing;
+
+        // Debounce: require blowConfirmFrames consecutive 1s before confirming.
+        // After confirmation, ignore the sensor for blowCooldownSeconds.
+        _blowCooldownTimer = Mathf.Max(0f, _blowCooldownTimer - Time.deltaTime);
+
+        if (_stageBlowing == 1 && _blowCooldownTimer <= 0f)
+        {
+            _blowConsecutiveCount++;
+            if (_blowConsecutiveCount >= blowConfirmFrames)
+            {
+                _blowFramesLeft       = 2;   // emit pulse; Update() drives isBlowing
+                _blowConsecutiveCount = 0;
+                _blowCooldownTimer    = blowCooldownSeconds;
+                Debug.Log("[DeviceInputManager] Blow confirmed.");
+            }
+        }
+        else
+        {
+            // Reset streak if sensor drops back to 0, or cooldown is still active
+            if (_stageBlowing == 0)
+                _blowConsecutiveCount = 0;
+        }
     }
 
     // ── Serial port management ────────────────────────────────────────
@@ -196,6 +243,8 @@ public class DeviceInputManager : MonoBehaviour
         GUI.Label(new Rect(10f, 50f, 320f, 20f), $"isTouching:  {isTouching}");
         GUI.Label(new Rect(10f, 70f, 320f, 20f), $"isGrounding: {isGrounding}");
         GUI.Label(new Rect(10f, 90f, 320f, 20f), $"isBlowing:   {isBlowing}");
+        if (useHardwareInput && _blowCooldownTimer > 0f)
+            GUI.Label(new Rect(10f, 110f, 320f, 20f), $"Blow cooldown: {_blowCooldownTimer:F1}s  (streak: {_blowConsecutiveCount}/{blowConfirmFrames})");
     }
 
     private void OnDestroy() => StopSerial();

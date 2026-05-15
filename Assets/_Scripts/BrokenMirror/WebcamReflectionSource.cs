@@ -68,7 +68,23 @@ public sealed class WebcamReflectionSource : MonoBehaviour
         webcamTexture.Play();
 
         if (runtimeMaterial != null)
+        {
             runtimeMaterial.SetTexture(texturePropertyId, webcamTexture);
+            runtimeMaterial.SetFloat("_FlipX", 0f); // no horizontal mirror on any platform
+            StartCoroutine(ApplyPlatformFlipAfterStart());
+        }
+    }
+
+    // WebCamTexture reports correct videoVerticallyMirrored only after the first frame.
+    private System.Collections.IEnumerator ApplyPlatformFlipAfterStart()
+    {
+        yield return null; // wait one frame for the webcam to initialise
+        if (webcamTexture == null) yield break;
+
+        // macOS returns frames vertically mirrored; correct it via the shader _FlipY property.
+        float flipY = webcamTexture.videoVerticallyMirrored ? 1f : 0f;
+        runtimeMaterial.SetFloat("_FlipY", flipY);
+        Debug.Log($"[BrokenMirror] videoVerticallyMirrored={webcamTexture.videoVerticallyMirrored} → _FlipY={flipY}");
     }
 
     private void ApplyFallbackTexture()

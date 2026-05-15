@@ -26,26 +26,49 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _ChromaStrength: 0.007
+    - _BlobScale: 3
+    - _ChromaEdgePow: 2.73
+    - _ChromaStrength: 0.0462
+    - _ColorSpeed: 2.18
     - _CoreEmission: 0
     - _CoreRadius: 0.005
-    - _DistortionStrength: 0.103
-    - _FlowSpeed: 4.15
-    - _FresnelPower: 8
-    - _IriIntensity: 2.4
-    - _IriOffset: 0
-    - _IriScale: 3.68
-    - _IriSpeed: 0.35
-    - _NoiseScale: 2.38
-    - _Opacity: 0.93
-    - _RadialBias: 1.51
+    - _DistortionStrength: 0.367
+    - _EdgePullStrength: 0.4
+    - _EdgeSoftness: 0.4
+    - _FlowSpeed: 2.4
+    - _FresnelIntensity: 4.27
+    - _FresnelPower: 4.73
+    - _GapOpacity: 0.823
+    - _IriOffset: 0.18
+    - _MetalF0: 0.713
+    - _NoiseScale: 1.72
+    - _RadialBias: 1.58
+    - _RingEmission: 7.9
+    - _RingRadius: 0.125
+    - _RingSpacing: 1.73
+    - _RingThickness: 0.0135
+    - _RingWarpStrength: 0.425
+    - _RotationOffset: 0
     - _ShapeIrregularity: 0
-    - _ShapeOffsetX: 0
-    - _ShapeOffsetY: 0
-    - _TendrilGlow: 4.79
+    - _ShapeOffsetX: 3.98
+    - _ShapeOffsetY: 1.54
+    - _SpawnProgress: 0.826
+    - _SpinSpeed: 0.18
+    - _StrokeEdge: 0.071
+    - _StrokeStretch: 9.22
+    - _StrokeThreshold: 0.51
+    - _SwirlStrength: 0.184
+    - _SwirlTightness: 13.6
     - _TestMode: 0
-    - _WarpAmount: 4.08
+    - _ThinFilmFreq: 1.3
+    - _TimeOffset: 0
+    - _TotalSize: 0.76
+    - _WarpAmount: 7.09
     m_Colors:
+    - _Color1: {r: 0.36107165, g: 0.073584795, b: 1, a: 1}
+    - _Color2: {r: 0.073029436, g: 0.9924528, b: 0.97510517, a: 1}
+    - _Color3: {r: 1, g: 0, b: 0.23990822, a: 1}
+    - _Color4: {r: 1, g: 0.74419844, b: 0, a: 1}
     - _CoreColor: {r: 1.2, g: 0.9, b: 1, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

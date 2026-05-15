@@ -42,7 +42,7 @@ Material:
     - _Instability: 0
     - _Darken: 0
     - _Contrast: 1
-    - _FlipX: 1
+    - _FlipX: 0
     m_Colors:
     - _Tint: {r: 1, g: 1, b: 1, a: 1}
     - _CrackColor: {r: 0.72, g: 0.9, b: 1, a: 1}

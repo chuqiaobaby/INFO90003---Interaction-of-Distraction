@@ -102,6 +102,8 @@ public sealed class CrackScreenDistortionFeature : ScriptableRendererFeature
     {
         if (_mat == null) return;
         if (renderingData.cameraData.cameraType != CameraType.Game) return;
+        // Only distort the primary display; skip projector / Display 2+ cameras.
+        if (renderingData.cameraData.camera.targetDisplay != 0) return;
         renderer.EnqueuePass(_pass);
     }
 

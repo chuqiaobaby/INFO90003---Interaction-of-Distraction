@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class WebCamManager : MonoBehaviour
@@ -7,17 +8,22 @@ public class WebCamManager : MonoBehaviour
 
     private WebCamTexture webcamTexture;
 
-    void Start()
+    IEnumerator Start()
     {
         WebCamDevice[] devices = WebCamTexture.devices;
 
         if (devices.Length > 0)
         {
             webcamTexture = new WebCamTexture(devices[0].name);
-            // BrokenMirror shader 使用 _WebcamTex，不再用 _BaseMap
             backgroundQuad.material.SetTexture("_WebcamTex", webcamTexture);
+            backgroundQuad.material.SetFloat("_FlipX", 0f); // no horizontal mirror on any platform
             webcamTexture.Play();
             Debug.Log("[WebCamManager] Camera connected: " + devices[0].name);
+
+            yield return null; // wait one frame for videoVerticallyMirrored to be valid
+            float flipY = webcamTexture.videoVerticallyMirrored ? 1f : 0f;
+            backgroundQuad.material.SetFloat("_FlipY", flipY);
+            Debug.Log($"[WebCamManager] videoVerticallyMirrored={webcamTexture.videoVerticallyMirrored} → _FlipY={flipY}");
         }
         else
         {

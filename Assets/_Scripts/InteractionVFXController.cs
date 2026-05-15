@@ -54,6 +54,13 @@ public class InteractionVFXController : MonoBehaviour
     [Range(0f, 1f)]
     public float touchGlassMaxOpacity = 0.95f;
 
+    [Tooltip("Fixed time (seconds) for the spawn-in animation regardless of effect lifetime.")]
+    [Range(0.05f, 1.0f)]
+    public float touchSpawnDuration = 0.30f;
+    [Tooltip("Fixed time (seconds) for the despawn animation regardless of effect lifetime.")]
+    [Range(0.05f, 1.0f)]
+    public float touchDespawnDuration = 0.30f;
+
     // ── Camera Shake ──────────────────────────────────────────────────────────
 
     [Header("Camera Shake  (Level 3 only)")]
@@ -92,10 +99,15 @@ public class InteractionVFXController : MonoBehaviour
     {
         public GameObject go;
         public Material   mat;
-        public float      alpha;
+        public float      alpha;     // retained for BlowRoutine snapshot
         public float      fadeTime;
+        public float      elapsed;   // seconds since spawn, drives _SpawnProgress
     }
     private readonly List<TouchGlassInstance> activeInstances = new List<TouchGlassInstance>();
+
+    private static readonly int s_SpawnProgressId   = Shader.PropertyToID("_SpawnProgress");
+    private static readonly int s_RotationOffsetId  = Shader.PropertyToID("_RotationOffset");
+    private static readonly int s_TimeOffsetId      = Shader.PropertyToID("_TimeOffset");
 
     private int prevIsTouching = 0;
 
@@ -313,11 +325,25 @@ public class InteractionVFXController : MonoBehaviour
         {
             TouchGlassInstance inst = activeInstances[i];
 
-            float decaySpeed = touchGlassMaxOpacity / Mathf.Max(0.05f, inst.fadeTime);
-            inst.alpha = Mathf.MoveTowards(inst.alpha, 0f, decaySpeed * Time.deltaTime);
-            inst.mat.SetFloat("_Opacity", inst.alpha);
+            inst.elapsed += Time.deltaTime;
 
-            if (inst.alpha <= 0.004f)
+            // Spawn-in and despawn always take fixed seconds; only the hold
+            // period in the middle stretches with fadeTime. This prevents the
+            // entrance/exit animation from slowing down as fadeTime grows.
+            float spawnDur   = Mathf.Max(0.05f, touchSpawnDuration);
+            float despawnDur = Mathf.Max(0.05f, touchDespawnDuration);
+            float holdDur    = Mathf.Max(0f, inst.fadeTime - spawnDur - despawnDur);
+            float progress;
+            if (inst.elapsed < spawnDur)
+                progress = (inst.elapsed / spawnDur) * 0.25f;
+            else if (inst.elapsed < spawnDur + holdDur)
+                progress = 0.25f + ((inst.elapsed - spawnDur) / Mathf.Max(0.001f, holdDur)) * 0.50f;
+            else
+                progress = 0.75f + Mathf.Clamp01((inst.elapsed - spawnDur - holdDur) / despawnDur) * 0.25f;
+
+            inst.mat.SetFloat(s_SpawnProgressId, progress);
+
+            if (inst.elapsed >= inst.fadeTime)
             {
                 inst.go.SetActive(false);
                 Destroy(inst.mat);
@@ -376,6 +402,8 @@ public class InteractionVFXController : MonoBehaviour
         mat.SetFloat("_ShapeIrregularity", Random.Range(0.18f, 0.35f));
         mat.SetFloat("_ShapeOffsetX",      Random.Range(0f, 100f));
         mat.SetFloat("_ShapeOffsetY",      Random.Range(0f, 100f));
+        mat.SetFloat(s_RotationOffsetId,   Random.Range(0f, Mathf.PI * 2f));
+        mat.SetFloat(s_TimeOffsetId,       Random.Range(0f, 100f));
 
         // Core colour: cycle through vivid HDR hues so simultaneous instances
         // are visually distinct even without looking at the blob shape
@@ -398,15 +426,16 @@ public class InteractionVFXController : MonoBehaviour
         mat.SetFloat("_CoreEmission", Random.Range(8f,  22f));
         // ─────────────────────────────────────────────────────────────────────
 
-        mat.SetFloat("_Opacity", touchGlassMaxOpacity);
+        mat.SetFloat(s_SpawnProgressId, 0.0f);
         go.SetActive(true);
 
         activeInstances.Add(new TouchGlassInstance
         {
             go       = go,
             mat      = mat,
-            alpha    = touchGlassMaxOpacity,
-            fadeTime = fadeTime
+            alpha    = touchGlassMaxOpacity,   // retained for BlowRoutine
+            fadeTime = fadeTime,
+            elapsed  = 0f
         });
 
         Debug.Log($"[VFX] TouchGlass spawned at viewport ({vx:F2}, {vy:F2})  " +
