@@ -27,11 +27,13 @@ Material:
     m_Ints: []
     m_Floats:
     - _BlobScale: 3
+    - _BlowFade: 1
     - _ChromaEdgePow: 2.73
     - _ChromaStrength: 0.0462
     - _ColorSpeed: 2.18
     - _CoreEmission: 0
     - _CoreRadius: 0.005
+    - _DissolveProgress: 0
     - _DistortionStrength: 0.367
     - _EdgePullStrength: 0.4
     - _EdgeSoftness: 0.4
@@ -52,6 +54,8 @@ Material:
     - _ShapeIrregularity: 0
     - _ShapeOffsetX: 3.98
     - _ShapeOffsetY: 1.54
+    - _SparkleGlow: 8
+    - _SparkleScale: 120
     - _SpawnProgress: 0.826
     - _SpinSpeed: 0.18
     - _StrokeEdge: 0.071

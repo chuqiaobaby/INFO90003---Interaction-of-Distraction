@@ -69,8 +69,50 @@ public class InteractionVFXController : MonoBehaviour
 
     // ── Blow Fade ─────────────────────────────────────────────────────────────
 
-    [Header("Blow Fade-Out")]
-    public float blowFadeDuration = 0.5f;
+    [Header("Blow — Timing")]
+    [Tooltip("How long the UI border/overlay fades out (seconds).")]
+    public float blowFadeDuration = 1.5f;
+
+    [Header("Blow — Star Material")]
+    [Tooltip("Material using Custom/StarGlow shader — create from StarGlow.shader in Project window.")]
+    public Material starGlowMaterial;
+
+    [Header("Blow — Star Count & Size")]
+    [Tooltip("Number of star particles spawned per active touch effect.")]
+    [Range(4, 120)] public int starsPerEffect = 12;
+
+    [Tooltip("Smallest star diameter in screen pixels.")]
+    [Range(2f, 80f)] public float starSizePixelMin = 10f;
+
+    [Tooltip("Largest star diameter in screen pixels.")]
+    [Range(5f, 160f)] public float starSizePixelMax = 45f;
+
+    [Header("Blow — Star Shape")]
+    [Tooltip("Probability (0–1) that a particle is a 4-pointed star rather than a soft dot.")]
+    [Range(0f, 1f)] public float starChance = 0.55f;
+
+    [Tooltip("Tip sharpness range — higher = more needle-like, lower = rounder.")]
+    public Vector2 starSharpnessRange = new Vector2(4f, 8f);
+
+    [Tooltip("Softness of the star edge — lower = crisper, higher = softer.")]
+    public Vector2 starSoftnessRange = new Vector2(0.04f, 0.14f);
+
+    [Tooltip("Outer glow radius — lower = tight sparkle, higher = wide halo.")]
+    public Vector2 starHaloRange = new Vector2(0.20f, 0.50f);
+
+    [Header("Blow — Star Timing")]
+    [Tooltip("Duration (seconds) for the glass to shrink away AFTER the stars have appeared.")]
+    [Range(0.1f, 1.0f)] public float blowTransitionDuration = 0.40f;
+
+    [Tooltip("Max random micro-delay (seconds) before each star pops in. Keep small so stars appear while the glass is still visible.")]
+    [Range(0f, 0.3f)] public float starMaxDelay = 0.05f;
+
+    [Tooltip("Min and max fade-out duration for each individual star (seconds).")]
+    public Vector2 starLifetimeRange = new Vector2(0.5f, 1.1f);
+
+    [Header("Blow — Star Brightness")]
+    [Tooltip("HDR brightness multiplier range — raise max for more bloom.")]
+    public Vector2 starBrightnessRange = new Vector2(1.2f, 2.5f);
 
     // ── Debug ─────────────────────────────────────────────────────────────────
 
@@ -99,15 +141,27 @@ public class InteractionVFXController : MonoBehaviour
     {
         public GameObject go;
         public Material   mat;
-        public float      alpha;     // retained for BlowRoutine snapshot
+        public float      alpha;
         public float      fadeTime;
-        public float      elapsed;   // seconds since spawn, drives _SpawnProgress
+        public float      elapsed;
+    }
+
+    private class StarParticle
+    {
+        public GameObject go;
+        public Material   mat;
+        public float      delay;      // seconds before fade begins
+        public float      lifetime;   // fade duration after delay
+        public float      age;        // running age in seconds
     }
     private readonly List<TouchGlassInstance> activeInstances = new List<TouchGlassInstance>();
+    private readonly List<StarParticle>       activeStars     = new List<StarParticle>();
 
     private static readonly int s_SpawnProgressId   = Shader.PropertyToID("_SpawnProgress");
+    private static readonly int s_BlowFadeId        = Shader.PropertyToID("_BlowFade");
     private static readonly int s_RotationOffsetId  = Shader.PropertyToID("_RotationOffset");
     private static readonly int s_TimeOffsetId      = Shader.PropertyToID("_TimeOffset");
+    private static readonly int s_StarAlphaId       = Shader.PropertyToID("_Alpha");
 
     private int prevIsTouching = 0;
 
@@ -145,6 +199,30 @@ public class InteractionVFXController : MonoBehaviour
         if (liquidGlassMaterial == null)
             Debug.LogWarning("[VFX] Liquid Glass Material is NOT assigned! " +
                              "Drag 'LiquidGlassAnomaly_Mat' from _Shader/ onto this component.");
+
+        // Force shader compilation before the first blow so there's no hitch at runtime
+        if (starGlowMaterial != null) StartCoroutine(WarmupStarShader());
+    }
+
+    IEnumerator WarmupStarShader()
+    {
+        Camera cam = mainCamera != null ? mainCamera : Camera.main;
+        if (cam == null) yield break;
+
+        GameObject dummy = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        dummy.name = "StarShaderWarmup";
+        Destroy(dummy.GetComponent<MeshCollider>());
+        dummy.transform.SetParent(cam.transform, false);
+        dummy.transform.localPosition = new Vector3(0f, 0f, touchEffectDepth);
+        dummy.transform.localScale    = Vector3.one * 0.0001f;   // too small to see
+        Material dummyMat = new Material(starGlowMaterial);
+        dummyMat.SetFloat(s_StarAlphaId, 0f);
+        dummy.GetComponent<MeshRenderer>().material = dummyMat;
+
+        yield return null;   // one frame is enough to compile the shader
+
+        Destroy(dummyMat);
+        Destroy(dummy);
     }
 
     void OnDestroy()
@@ -196,6 +274,8 @@ public class InteractionVFXController : MonoBehaviour
             groundingDuration = dm.groundingDuration;
             backtrackSpeed    = dm.backtrackSpeed;
         }
+
+        UpdateStars();
 
         if (blowInProgress) return;
 
@@ -353,6 +433,109 @@ public class InteractionVFXController : MonoBehaviour
         }
     }
 
+    const float StarFadeInDur = 0.10f;  // quick pop-in before the fade-out begins
+
+    void UpdateStars()
+    {
+        for (int i = activeStars.Count - 1; i >= 0; i--)
+        {
+            StarParticle star = activeStars[i];
+            star.age += Time.deltaTime;
+
+            float total = star.delay + StarFadeInDur + star.lifetime;
+            if (star.age >= total)
+            {
+                if (star.mat != null) Destroy(star.mat);
+                if (star.go  != null) Destroy(star.go);
+                activeStars.RemoveAt(i);
+                continue;
+            }
+
+            float alpha;
+            if (star.age < star.delay)
+            {
+                alpha = 0f;                                        // waiting — invisible
+            }
+            else
+            {
+                float local = star.age - star.delay;
+                if (local < StarFadeInDur)
+                    alpha = local / StarFadeInDur;                 // linear pop-in
+                else
+                {
+                    float t = Mathf.Clamp01((local - StarFadeInDur) / star.lifetime);
+                    alpha = 1f - (t * t * t);                      // cubic ease-out
+                }
+            }
+
+            if (star.mat != null) star.mat.SetFloat(s_StarAlphaId, alpha);
+        }
+    }
+
+    // Spawns exactly one star quad for the given instance. Called from BlowRoutine
+    // a few at a time per frame to avoid an instantiation spike.
+    void SpawnOneStar(Camera cam, TouchGlassInstance inst, float worldPerPixel)
+    {
+        if (inst.go == null) return;
+
+        Vector3 center = inst.go.transform.localPosition;
+        float halfW    = inst.go.transform.localScale.x * 0.5f;
+        float halfH    = inst.go.transform.localScale.y * 0.5f;
+
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = "StarParticle";
+        Destroy(go.GetComponent<MeshCollider>());
+        go.transform.SetParent(cam.transform, false);
+
+        MeshRenderer mr = go.GetComponent<MeshRenderer>();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows    = false;
+
+        Material mat = new Material(starGlowMaterial);
+        mr.material = mat;
+
+        // Spawn within the visible blob (shader blob radius ≈ 0.45 of quad half-size).
+        // Disk distribution (sqrt keeps density uniform, not centre-heavy).
+        float blobRadius = Mathf.Min(halfW, halfH) * 0.50f;
+        float angle = Random.Range(0f, Mathf.PI * 2f);
+        float dist  = Mathf.Sqrt(Random.value) * blobRadius;
+        float lx = center.x + Mathf.Cos(angle) * dist;
+        float ly = center.y + Mathf.Sin(angle) * dist;
+        go.transform.localPosition = new Vector3(lx, ly, center.z);
+        go.transform.localRotation = Quaternion.Euler(0f, 0f, Random.Range(0f, 90f));
+
+        float pMin = Mathf.Min(starSizePixelMin, starSizePixelMax);
+        float pMax = Mathf.Max(starSizePixelMin, starSizePixelMax);
+        float size = Random.Range(pMin, pMax) * worldPerPixel;
+        go.transform.localScale = new Vector3(size, size, 1f);
+
+        mat.SetFloat("_StarType",  Random.value < starChance ? 1.0f : 0.0f);
+        mat.SetFloat("_Sharpness", Random.Range(starSharpnessRange.x, starSharpnessRange.y));
+        mat.SetFloat("_Softness",  Random.Range(starSoftnessRange.x,  starSoftnessRange.y));
+        mat.SetFloat("_HaloSize",  Random.Range(starHaloRange.x,      starHaloRange.y));
+
+        float warm   = Random.value;
+        float bright = Random.Range(starBrightnessRange.x, starBrightnessRange.y);
+        // warm=0 → cool ice-white (R low, B high), warm=1 → golden-white (R high, B low)
+        // G stays near 0.96 so there's always enough green to keep the star white, not pink
+        float r = Mathf.Lerp(0.88f, 1.00f, warm);
+        float g = 0.96f;
+        float b = Mathf.Lerp(1.00f, 0.80f, warm);
+        mat.SetColor("_Color", new Color(r * bright, g * bright, b * bright, 1f));
+        mat.SetFloat(s_StarAlphaId, 0f);  // starts invisible; UpdateStars fades it in
+
+        float lMin = Mathf.Min(starLifetimeRange.x, starLifetimeRange.y);
+        float lMax = Mathf.Max(starLifetimeRange.x, starLifetimeRange.y);
+        activeStars.Add(new StarParticle
+        {
+            go       = go,
+            mat      = mat,
+            delay    = Random.Range(0f, Mathf.Max(0f, starMaxDelay)),
+            lifetime = Random.Range(lMin, lMax),
+            age      = 0f
+        });
+    }
+
     void SpawnTouchGlassInstance()
     {
         if (liquidGlassMaterial == null) return;
@@ -379,15 +562,22 @@ public class InteractionVFXController : MonoBehaviour
         float vy    = Random.Range(pad, 1f - pad);
         float depth = Mathf.Max(cam.nearClipPlane + 0.05f, touchEffectDepth);
 
-        float halfFovRad = cam.fieldOfView * 0.5f * Mathf.Deg2Rad;
-        float vpWorldH   = 2f * Mathf.Tan(halfFovRad) * depth;
-        float vpWorldW   = vpWorldH * cam.aspect;
-        float scaleX     = (touchEffectPixelSize.x / Screen.width)  * vpWorldW;
-        float scaleY     = (touchEffectPixelSize.y / Screen.height) * vpWorldH;
+        // ViewportToWorldPoint handles any camera mode / aspect ratio correctly
+        Vector3 worldPos = cam.ViewportToWorldPoint(new Vector3(vx, vy, depth));
+        Vector3 localPos = cam.transform.InverseTransformPoint(worldPos);
 
-        float localX = (vx - 0.5f) * vpWorldW;
-        float localY = (vy - 0.5f) * vpWorldH;
-        go.transform.localPosition = new Vector3(localX, localY, depth);
+        // Derive world-space size of the full viewport at this depth
+        float worldW = Vector3.Distance(
+            cam.ViewportToWorldPoint(new Vector3(0f, 0.5f, depth)),
+            cam.ViewportToWorldPoint(new Vector3(1f, 0.5f, depth)));
+        float worldH = Vector3.Distance(
+            cam.ViewportToWorldPoint(new Vector3(0.5f, 0f, depth)),
+            cam.ViewportToWorldPoint(new Vector3(0.5f, 1f, depth)));
+
+        float scaleX = (touchEffectPixelSize.x / Screen.width)  * worldW;
+        float scaleY = (touchEffectPixelSize.y / Screen.height) * worldH;
+
+        go.transform.localPosition = localPos;
         go.transform.localRotation = Quaternion.identity;
         go.transform.localScale    = new Vector3(scaleX, scaleY, 1f);
 
@@ -495,64 +685,74 @@ public class InteractionVFXController : MonoBehaviour
 
     IEnumerator BlowRoutine()
     {
-        float elapsed = 0f;
+        Camera cam = mainCamera != null ? mainCamera : Camera.main;
 
-        // Snapshot all instances alive at blow time
-        List<TouchGlassInstance> toFade = new List<TouchGlassInstance>(activeInstances);
-        float[] startAlphas = new float[toFade.Count];
-        for (int i = 0; i < toFade.Count; i++)
-            startAlphas[i] = toFade[i].alpha;
+        // ── Setup ─────────────────────────────────────────────────────────────────
+        List<TouchGlassInstance> instances = new List<TouchGlassInstance>(activeInstances);
 
-        if (vfxGroup != null)
+        float depth = instances.Count > 0 && instances[0].go != null
+            ? instances[0].go.transform.localPosition.z
+            : touchEffectDepth;
+        float worldPerPixel = cam != null
+            ? Vector3.Distance(
+                cam.ViewportToWorldPoint(new Vector3(0.5f, 0f, depth)),
+                cam.ViewportToWorldPoint(new Vector3(0.5f, 1f, depth))) / Screen.height
+            : 0.001f;
+
+        // Interleave: inst0, inst1, inst0, inst1, … so all effects get
+        // their first star in the same frame and appear in sync.
+        var spawnQ = new Queue<TouchGlassInstance>(instances.Count * starsPerEffect);
+        for (int j = 0; j < starsPerEffect; j++)
+            foreach (TouchGlassInstance inst in instances)
+                spawnQ.Enqueue(inst);
+
+        // ── Phase 1+2 combined: glass fades out WHILE stars simultaneously appear ──
+        // Use _BlowFade (1→0) instead of _SpawnProgress so effects that are still
+        // spawning-in don't flash to full visibility before fading out.
+        float trans = 0f;
+        while (trans < blowTransitionDuration || spawnQ.Count > 0)
         {
-            while (elapsed < blowFadeDuration)
-            {
-                elapsed += Time.deltaTime;
-                float t = 1f - Mathf.Clamp01(elapsed / blowFadeDuration);
-                vfxGroup.alpha = t;
+            trans += Time.deltaTime;
+            float t = Mathf.Clamp01(trans / blowTransitionDuration);
 
-                for (int i = 0; i < toFade.Count; i++)
-                {
-                    if (toFade[i].mat != null)
-                    {
-                        toFade[i].alpha = startAlphas[i] * t;
-                        toFade[i].mat.SetFloat("_Opacity", toFade[i].alpha);
-                    }
-                }
+            // Fade via independent multiplier — works at any SpawnProgress value
+            for (int i = 0; i < instances.Count; i++)
+                if (instances[i].mat != null)
+                    instances[i].mat.SetFloat(s_BlowFadeId, 1.0f - t);
 
-                yield return null;
-            }
-            vfxGroup.alpha = 0f;
+            // Stars trickle in alongside the glass fade
+            if (cam != null)
+                for (int n = 0; n < 8 && spawnQ.Count > 0; n++)
+                    SpawnOneStar(cam, spawnQ.Dequeue(), worldPerPixel);
+
+            yield return null;
         }
-        else
+
+        foreach (TouchGlassInstance inst in instances)
+            if (inst.go != null) inst.go.SetActive(false);
+
+        // ── Phase 3: fade UI (border / overlay) out ──────────────────────────────
+        Color startOverlay = colorOverlay    != null ? colorOverlay.color    : Color.clear;
+        Color startBorder  = groundingBorder != null ? groundingBorder.color : Color.clear;
+
+        float elapsed = 0f;
+        while (elapsed < blowFadeDuration)
         {
-            Color startOverlay = colorOverlay    != null ? colorOverlay.color    : Color.clear;
-            Color startBorder  = groundingBorder != null ? groundingBorder.color : Color.clear;
+            elapsed += Time.deltaTime;
+            float t = 1f - Mathf.Clamp01(elapsed / blowFadeDuration);
+            if (colorOverlay    != null)
+                colorOverlay.color    = new Color(startOverlay.r, startOverlay.g, startOverlay.b, startOverlay.a * t);
+            if (groundingBorder != null)
+                groundingBorder.color = new Color(startBorder.r,  startBorder.g,  startBorder.b,  startBorder.a  * t);
+            yield return null;
+        }
 
-            while (elapsed < blowFadeDuration)
-            {
-                elapsed += Time.deltaTime;
-                float t = 1f - Mathf.Clamp01(elapsed / blowFadeDuration);
-
-                if (colorOverlay != null)
-                    colorOverlay.color = new Color(
-                        startOverlay.r, startOverlay.g, startOverlay.b, startOverlay.a * t);
-
-                if (groundingBorder != null)
-                    groundingBorder.color = new Color(
-                        startBorder.r, startBorder.g, startBorder.b, startBorder.a * t);
-
-                for (int i = 0; i < toFade.Count; i++)
-                {
-                    if (toFade[i].mat != null)
-                    {
-                        toFade[i].alpha = startAlphas[i] * t;
-                        toFade[i].mat.SetFloat("_Opacity", toFade[i].alpha);
-                    }
-                }
-
-                yield return null;
-            }
+        // ── Phase 3: wait for all stars to finish ────────────────────────────────
+        float starWait = 0f;
+        while (activeStars.Count > 0 && starWait < 3f)
+        {
+            starWait += Time.deltaTime;
+            yield return null;
         }
 
         HardReset();
@@ -696,6 +896,13 @@ public class InteractionVFXController : MonoBehaviour
 
     void HardReset()
     {
+        foreach (StarParticle star in activeStars)
+        {
+            if (star.mat != null) Destroy(star.mat);
+            if (star.go  != null) Destroy(star.go);
+        }
+        activeStars.Clear();
+
         vfxState       = VFXState.Normal;
         groundingTimer = 0f;
         prevIsTouching = 0;

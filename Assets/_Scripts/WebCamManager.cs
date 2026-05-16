@@ -7,6 +7,8 @@ public class WebCamManager : MonoBehaviour
     public MeshRenderer backgroundQuad;
 
     private WebCamTexture webcamTexture;
+    private int lastScreenW = -1;
+    private int lastScreenH = -1;
 
     IEnumerator Start()
     {
@@ -16,19 +18,53 @@ public class WebCamManager : MonoBehaviour
         {
             webcamTexture = new WebCamTexture(devices[0].name);
             backgroundQuad.material.SetTexture("_WebcamTex", webcamTexture);
-            backgroundQuad.material.SetFloat("_FlipX", 0f); // no horizontal mirror on any platform
+            backgroundQuad.material.SetFloat("_FlipX", 0f);
             webcamTexture.Play();
             Debug.Log("[WebCamManager] Camera connected: " + devices[0].name);
 
-            yield return null; // wait one frame for videoVerticallyMirrored to be valid
+            yield return null; // wait one frame for videoVerticallyMirrored and real resolution
             float flipY = webcamTexture.videoVerticallyMirrored ? 1f : 0f;
             backgroundQuad.material.SetFloat("_FlipY", flipY);
             Debug.Log($"[WebCamManager] videoVerticallyMirrored={webcamTexture.videoVerticallyMirrored} → _FlipY={flipY}");
+
+            ApplyAspectCorrection();
         }
         else
         {
             Debug.LogError("[WebCamManager] No camera found!");
         }
+    }
+
+    void Update()
+    {
+        if (webcamTexture == null || !webcamTexture.isPlaying) return;
+        if (Screen.width != lastScreenW || Screen.height != lastScreenH)
+            ApplyAspectCorrection();
+    }
+
+    void ApplyAspectCorrection()
+    {
+        lastScreenW = Screen.width;
+        lastScreenH = Screen.height;
+
+        // webcam.width can be tiny before the first real frame arrives
+        if (webcamTexture == null || webcamTexture.width < 64) return;
+
+        float screenAspect = (float)Screen.width / Screen.height;
+        float webcamAspect = (float)webcamTexture.width / webcamTexture.height;
+
+        // Center-crop (aspect fill): no black bars, crops the narrower dimension
+        float corrX = 1f, corrY = 1f;
+        if (screenAspect >= webcamAspect)
+            corrY = webcamAspect / screenAspect; // screen wider → crop webcam height
+        else
+            corrX = screenAspect / webcamAspect; // screen taller → crop webcam width
+
+        backgroundQuad.material.SetVector("_AspectRatioCorrection", new Vector4(corrX, corrY, 0f, 0f));
+
+        Debug.Log($"[WebCamManager] Screen {Screen.width}×{Screen.height} ({screenAspect:F2}) | " +
+                  $"Webcam {webcamTexture.width}×{webcamTexture.height} ({webcamAspect:F2}) | " +
+                  $"UV correction ({corrX:F3}, {corrY:F3})");
     }
 
     void OnDestroy()

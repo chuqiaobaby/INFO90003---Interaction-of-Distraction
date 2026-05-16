@@ -76,6 +76,10 @@ Shader "Custom/LiquidGlassAnomaly"
         _RotationOffset     ("Instance Stroke Rotation (radians)",     Float) = 0.0
         _TimeOffset         ("Instance Time Offset",                   Float) = 0.0
         _SpawnProgress      ("Spawn / Despawn Progress",               Range(0.0, 1.0)) = 0.5
+        _BlowFade           ("Blow Fade Multiplier",                   Range(0.0, 1.0)) = 1.0
+        _DissolveProgress   ("Dissolve-to-Sparkles Progress",          Range(0.0, 1.0)) = 0.0
+        _SparkleScale       ("Sparkle Cell Scale",                     Range(10,  120))  = 55
+        _SparkleGlow        ("Sparkle Glow Intensity",                 Range(0.0,  8.0)) = 4.0
 
         [Space(6)][Header(Diagnostic)]
         [Toggle] _TestMode  ("Test Mode (solid red)", Float) = 0
@@ -149,6 +153,10 @@ Shader "Custom/LiquidGlassAnomaly"
                 float  _RotationOffset;
                 float  _TimeOffset;
                 float  _SpawnProgress;
+                float  _BlowFade;
+                float  _DissolveProgress;
+                float  _SparkleScale;
+                float  _SparkleGlow;
                 float  _TestMode;
             CBUFFER_END
 
@@ -570,8 +578,32 @@ Shader "Custom/LiquidGlassAnomaly"
                 // ── Alpha ─────────────────────────────────────────────────────
                 // Gaps use _GapOpacity so the distorted refraction sample shows.
                 // Strokes are fully opaque (alpha = 1).
-                float alpha = lerp(_GapOpacity, 1.0f, strokeMask) * radialAlpha * edgeFade * lifeFade * softEdge;
+                float alpha = lerp(_GapOpacity, 1.0f, strokeMask) * radialAlpha * edgeFade * lifeFade * softEdge * _BlowFade;
                 alpha = saturate(alpha);
+
+                // ── Dissolve to sparkles ──────────────────────────────────────
+                // Cells below _DissolveProgress are discarded. Cells near the
+                // boundary flash as circular glowing star dots (core + soft halo).
+                if (_DissolveProgress > 0.001f)
+                {
+                    float2 cell      = floor(uv * _SparkleScale);
+                    float  cellNoise = frac(sin(dot(cell, float2(127.1f, 311.7f))) * 43758.5453f);
+                    if (cellNoise < _DissolveProgress) discard;
+
+                    // Sub-cell coordinate → circular dot shape (not square pixel)
+                    float2 cellUV  = frac(uv * _SparkleScale) - 0.5f;
+                    float  dotDist = length(cellUV);
+                    float  dotCore = smoothstep(0.30f, 0.04f, dotDist);  // sharp bright centre
+                    float  dotHalo = smoothstep(0.50f, 0.00f, dotDist);  // soft outer glow
+
+                    // Sparkle: brightest at the dissolve wavefront, fades ahead of it
+                    float  sparkle = smoothstep(_DissolveProgress + 0.18f, _DissolveProgress, cellNoise);
+                    // Per-cell random flicker speed so each star pulses differently
+                    float  flicker = frac(sin(dot(cell, float2(311.7f, 127.1f)) + _Time.y * 7.0f) * 43758.5453f);
+                    float  shine   = (dotCore * 1.6f + dotHalo * 0.5f) * (0.45f + 0.55f * flicker);
+
+                    col += sparkle * _SparkleGlow * float3(1.0f, 0.95f, 0.82f) * shine;
+                }
 
                 return half4(col, alpha);
             }
