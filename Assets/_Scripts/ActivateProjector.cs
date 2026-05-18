@@ -17,12 +17,21 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField] private float cameraHeight = 5f;
     [SerializeField] private float projectionHeight = 0f;
 
+    [Header("Display 2 Debug Background")]
+    [SerializeField] private bool showExternalCameraAsBackground = true;
+    [SerializeField] private bool debugBackgroundFlipX;
+    [SerializeField] private bool debugBackgroundFlipY;
+
     [Header("Hand Tracking")]
     [SerializeField] private bool useHandTrackingPosition = true;
+    [SerializeField] private bool useMediaPipeHandTracking = true;
+    [SerializeField] private bool mediaPipeHandVisibleTriggersRipple = true;
     [SerializeField] private bool useMousePositionWhenHandMissing = true;
     [SerializeField] private float repeatRippleWhileTouching = 0.45f;
 
     private PastelClassicRippleController pastelProjection;
+    private Display2CameraDebugBackground debugBackground;
+    private Display2MediaPipeHandTracker mediaPipeHandTracking;
     private HandTrackingUdpReceiver handTracking;
     private bool wasTouching;
     private float lastRippleTime = -1000f;
@@ -36,8 +45,22 @@ public class ActivateProjector : MonoBehaviour
             SetupPastelProjection();
         }
 
+        if (useMediaPipeHandTracking)
+        {
+            mediaPipeHandTracking = Display2MediaPipeHandTracker.Instance;
+            if (mediaPipeHandTracking == null)
+            {
+                mediaPipeHandTracking = gameObject.AddComponent<Display2MediaPipeHandTracker>();
+            }
+        }
+
+        if (showExternalCameraAsBackground)
+        {
+            SetupExternalCameraDebugBackground();
+        }
+
         handTracking = HandTrackingUdpReceiver.Instance;
-        if (handTracking == null)
+        if (handTracking == null && !useMediaPipeHandTracking)
         {
             handTracking = gameObject.AddComponent<HandTrackingUdpReceiver>();
         }
@@ -52,21 +75,37 @@ public class ActivateProjector : MonoBehaviour
 
         DeviceInputManager input = DeviceInputManager.Instance;
         bool isTouching = input != null && input.isTouching == 1;
+
+        bool canUseMediaPipePosition = useHandTrackingPosition &&
+            useMediaPipeHandTracking &&
+            mediaPipeHandTracking != null &&
+            mediaPipeHandTracking.HandVisible;
+        bool canUseUdpPosition = useHandTrackingPosition &&
+            handTracking != null &&
+            handTracking.HandVisible;
+        bool canUseHandPosition = canUseMediaPipePosition || canUseUdpPosition;
+
+        if (mediaPipeHandVisibleTriggersRipple && canUseMediaPipePosition)
+        {
+            isTouching = true;
+        }
+
         if (Application.isEditor && Input.GetKey(manualTriggerKey))
         {
             isTouching = true;
         }
 
-        bool canUseHandPosition = useHandTrackingPosition &&
-            handTracking != null &&
-            handTracking.HandVisible;
         bool canUseMousePosition = useMousePositionWhenHandMissing &&
             !canUseHandPosition &&
             Application.isEditor;
 
         if (isTouching && (canUseHandPosition || canUseMousePosition) && (!wasTouching || Time.time - lastRippleTime >= repeatRippleWhileTouching))
         {
-            Vector2 ripplePosition = canUseHandPosition ? handTracking.NormalizedPosition : GetMouseNormalizedPosition();
+            Vector2 ripplePosition = canUseMediaPipePosition
+                ? mediaPipeHandTracking.NormalizedPosition
+                : canUseUdpPosition
+                    ? handTracking.NormalizedPosition
+                    : GetMouseNormalizedPosition();
             pastelProjection.TriggerRipple(ripplePosition);
             lastRippleTime = Time.time;
         }
@@ -141,6 +180,41 @@ public class ActivateProjector : MonoBehaviour
         pastelProjection.grainStrength = grainStrength;
         pastelProjection.cameraHeight = cameraHeight;
         pastelProjection.projectionHeight = projectionHeight;
+    }
+
+    private void SetupExternalCameraDebugBackground()
+    {
+        Camera targetCamera = projectorCamera != null ? projectorCamera : FindProjectorCamera();
+        if (targetCamera == null)
+        {
+            return;
+        }
+
+        GameObject backgroundObject = GameObject.Find("Display 2 Camera Debug Background");
+        if (backgroundObject == null)
+        {
+            backgroundObject = new GameObject("Display 2 Camera Debug Background");
+        }
+
+        int projectionLayer = LayerMask.NameToLayer("ProjectionContent");
+        if (projectionLayer >= 0)
+        {
+            backgroundObject.layer = projectionLayer;
+        }
+
+        debugBackground = backgroundObject.GetComponent<Display2CameraDebugBackground>();
+        if (debugBackground == null)
+        {
+            debugBackground = backgroundObject.AddComponent<Display2CameraDebugBackground>();
+        }
+
+        debugBackground.targetCamera = targetCamera;
+        debugBackground.handTracker = mediaPipeHandTracking;
+        debugBackground.cameraHeight = cameraHeight + 0.05f;
+        debugBackground.projectionHeight = projectionHeight - 0.01f;
+        debugBackground.matchHandTrackerOrientation = true;
+        debugBackground.flipX = debugBackgroundFlipX;
+        debugBackground.flipY = debugBackgroundFlipY;
     }
 
     private Camera FindProjectorCamera()
