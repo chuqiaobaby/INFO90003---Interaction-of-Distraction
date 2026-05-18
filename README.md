@@ -1,5 +1,7 @@
 # Mon 18 May — Hand Tracking Progress Summary
 
+I use https://github.com/homuler/MediaPipeUnityPlugin this for hadn tracking.
+
 ## 1. Hand Tracking Implementation
 
 Hand Tracking has been implemented and tested successfully using an external camera.  
@@ -23,3 +25,5 @@ Under Hand Tracking, uncheck:
 Media Pipe Hand Visible Triggers Ripple
 
 After this, the system will fall back to mouse coordinates for testing instead of camera-triggered ripples.
+
+
