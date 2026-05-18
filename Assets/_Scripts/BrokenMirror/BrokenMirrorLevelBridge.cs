@@ -43,7 +43,10 @@ public sealed class BrokenMirrorLevelBridge : MonoBehaviour
             mirrorFractureController.ResetMirror();
             _lastLevel           = level;
             _wasShielded         = false;
-            _awaitingLevelReset  = (level > 0); // wait for staff to drain water back to 0
+            // In hardware mode, wait for physical water to drain back to 0.
+            // In keyboard/sim mode, allow immediate re-cracking.
+            bool isHardwareMode  = hw != null && hw.useHardwareInput;
+            _awaitingLevelReset  = isHardwareMode && (level > 0);
             return;
         }
 

@@ -18,20 +18,28 @@ public class InteractionVFXController : MonoBehaviour
     public CanvasGroup vfxGroup;
     public Camera     mainCamera;
 
-    // ── Water Level Colors ────────────────────────────────────────────────────
+    // ── Pulse Rings ───────────────────────────────────────────────────────────
 
-    [Header("Water Level Overlay Colors")]
-    [Tooltip("Disable this when BrokenMirrorLevelBridge is used — the mirror effect replaces the overlay.")]
-    public bool enableLevelColorOverlay = false;
-    public Color level1Color = new Color(0.00f, 0.50f, 1.00f, 0.15f);
-    public Color level2Color = new Color(1.00f, 0.20f, 0.20f, 0.30f);
-    public Color level3Color = new Color(1.00f, 0.05f, 0.05f, 0.55f);
+    [Header("Pulse Rings — Grounding")]
+    public Color ringColor = new Color(0.00f, 1.00f, 0.816f, 0.85f);
+    [Range(0.8f, 2.5f)]  public float ringExpandDuration = 1.3f;
+    [Range(0.02f, 0.50f)] public float ringThickness = 0.22f;
 
-    // ── Grounding Border Colors ───────────────────────────────────────────────
+    // ── Border Glow ───────────────────────────────────────────────────────────
 
-    [Header("Grounding Border Colors")]
-    public Color groundingColor = new Color(0.00f, 1.00f, 0.816f, 1.00f);
-    public Color shieldedColor  = new Color(1.00f, 0.90f, 0.30f,  1.00f);
+    [Header("Border Glow — Shielded")]
+    public Color  borderGlowColor  = new Color(1.00f, 0.90f, 0.30f, 1.0f);
+    [Range(1f, 6f)]       public float borderPulseSpeed    = 2.5f;
+    [Range(0.05f, 0.30f)] public float borderGlowFraction  = 0.12f;
+
+    // ── Shielded Particles ────────────────────────────────────────────────────
+
+    [Header("Shielded Particles")]
+    public Color   shieldParticleColor    = new Color(1.00f, 0.85f, 0.20f, 1.0f);
+    [Range(2, 20)] public int    particlesPerSecond    = 8;
+    public Vector2 particleSizeRange     = new Vector2(6f, 24f);
+    public Vector2 particleLifetimeRange = new Vector2(1.0f, 2.5f);
+    public Vector2 particleSpeedRange    = new Vector2(50f, 150f);
 
     // ── Liquid Glass Touch Effect ─────────────────────────────────────────────
 
@@ -150,12 +158,46 @@ public class InteractionVFXController : MonoBehaviour
     {
         public GameObject go;
         public Material   mat;
-        public float      delay;      // seconds before fade begins
-        public float      lifetime;   // fade duration after delay
-        public float      age;        // running age in seconds
+        public float      delay;
+        public float      lifetime;
+        public float      age;
     }
+
+    private class PulseRing
+    {
+        public RectTransform rt;
+        public Image         image;
+        public float         elapsed;
+        public float         duration;
+        public float         maxSize;
+        public Color         startColor;  // white-tinted on spawn, lerps to ringColor
+        public bool          isBloom;     // wide soft glow layer
+    }
+
+    private class FloatParticle
+    {
+        public RectTransform rt;
+        public Image         image;
+        public float         elapsed;
+        public float         lifetime;
+        public Vector2       velocity;
+    }
+
     private readonly List<TouchGlassInstance> activeInstances = new List<TouchGlassInstance>();
     private readonly List<StarParticle>       activeStars     = new List<StarParticle>();
+    private readonly List<PulseRing>          activeRings     = new List<PulseRing>();
+    private readonly List<FloatParticle>      activeParticles = new List<FloatParticle>();
+
+    private int   ringsSpawned       = 0;
+    private float particleSpawnTimer = 0f;
+    private float shieldedFadeTimer  = 0f;
+    private const float ShieldFadeInDur = 0.6f;
+
+    private readonly Image[] borderGlowEdges = new Image[4];
+
+    private Texture2D ringTex;
+    private Texture2D bloomRingTex;
+    private Texture2D circleTex;
 
     private static readonly int s_SpawnProgressId   = Shader.PropertyToID("_SpawnProgress");
     private static readonly int s_BlowFadeId        = Shader.PropertyToID("_BlowFade");
@@ -183,6 +225,10 @@ public class InteractionVFXController : MonoBehaviour
 
         if (mainCamera == null) mainCamera = Camera.main;
         if (mainCamera != null) camOrigin  = mainCamera.transform.localPosition;
+
+        ringTex      = CreateRingTex(128);
+        bloomRingTex = CreateBloomRingTex(128);
+        circleTex    = CreateCircleTex(64);
 
         SetupUI();
         ResetUI();
@@ -225,9 +271,26 @@ public class InteractionVFXController : MonoBehaviour
         Destroy(dummy);
     }
 
+    void OnValidate()
+    {
+        if (ringTex == null) return;
+        Destroy(ringTex);
+        ringTex = CreateRingTex(128);
+        if (bloomRingTex != null) Destroy(bloomRingTex);
+        bloomRingTex = CreateBloomRingTex(128);
+        foreach (PulseRing ring in activeRings)
+            if (ring.image != null)
+                ring.image.sprite = TexToSprite(ring.isBloom ? bloomRingTex : ringTex);
+    }
+
     void OnDestroy()
     {
         DestroyAllInstances();
+        foreach (PulseRing ring in activeRings)    if (ring.rt != null) Destroy(ring.rt.gameObject);
+        foreach (FloatParticle p in activeParticles) if (p.rt != null) Destroy(p.rt.gameObject);
+        if (ringTex      != null) Destroy(ringTex);
+        if (bloomRingTex != null) Destroy(bloomRingTex);
+        if (circleTex    != null) Destroy(circleTex);
     }
 
     // ── Canvas UI Setup ───────────────────────────────────────────────────────
@@ -260,6 +323,8 @@ public class InteractionVFXController : MonoBehaviour
             groundingBorder.fillOrigin = (int)Image.OriginHorizontal.Left;
             groundingBorder.fillAmount = 0f;
         }
+
+        SetupBorderGlow(root);
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -276,6 +341,8 @@ public class InteractionVFXController : MonoBehaviour
         }
 
         UpdateStars();
+        UpdateRings();
+        UpdateFloatParticles();
 
         if (blowInProgress) return;
 
@@ -293,6 +360,7 @@ public class InteractionVFXController : MonoBehaviour
         if (!frozen) UpdateCameraShake(level);
 
         UpdateBorder();
+        UpdateBorderGlow();
     }
 
     // ── Input helpers (DeviceInputManager with keyboard fallback) ─────────────
@@ -363,25 +431,7 @@ public class InteractionVFXController : MonoBehaviour
 
     void UpdateColorOverlay(int level)
     {
-        if (colorOverlay == null) return;
-        if (!enableLevelColorOverlay) { colorOverlay.color = Color.clear; return; }
-
-        if (levelAtBlow >= 0)
-        {
-            if (level == levelAtBlow) { colorOverlay.color = Color.clear; return; }
-            else                        levelAtBlow = -1;
-        }
-
-        Color target;
-        switch (level)
-        {
-            case 1:  target = level1Color; break;
-            case 2:  target = level2Color; break;
-            case 3:  target = level3Color; break;
-            default: target = Color.clear; break;
-        }
-
-        colorOverlay.color = Color.Lerp(colorOverlay.color, target, Time.deltaTime * 5f);
+        if (colorOverlay != null) colorOverlay.color = Color.clear;
     }
 
     // ── Effect 2: Liquid Glass Touch Effect ───────────────────────────────────
@@ -632,25 +682,214 @@ public class InteractionVFXController : MonoBehaviour
                   $"fadeTime={fadeTime:F1}s  active={activeInstances.Count}");
     }
 
-    // ── Effect 3 / 4: Grounding Border ───────────────────────────────────────
+    // ── Effect 3 / 4: Pulse Rings + Border Glow ──────────────────────────────
 
     void UpdateBorder()
     {
-        if (groundingBorder == null) return;
+        if (groundingBorder != null) groundingBorder.enabled = false;
+    }
 
-        if (vfxState == VFXState.Shielded)
+    void UpdateRings()
+    {
+        if (vfxState == VFXState.Grounding && !blowInProgress)
         {
-            groundingBorder.enabled    = true;
-            groundingBorder.fillAmount = 1f;
-            groundingBorder.color      = shieldedColor;
-            return;
+            float interval   = groundingDuration > 0f ? groundingDuration / 5f : 1f;
+            // +1 so the first ring spawns immediately (timer > 0), not after 1 s.
+            // When timer == 0 (fully reset) shouldHave = 0, which clears ringsSpawned.
+            int shouldHave = groundingTimer > 0f
+                ? Mathf.Clamp(Mathf.FloorToInt(groundingTimer / interval) + 1, 0, 5)
+                : 0;
+            if (shouldHave < ringsSpawned) ringsSpawned = shouldHave;
+            while (ringsSpawned < shouldHave) { SpawnPulseRing(); ringsSpawned++; }
+        }
+        else if (vfxState == VFXState.Normal)
+        {
+            ringsSpawned = 0;
         }
 
-        float fill  = groundingDuration > 0f ? Mathf.Clamp01(groundingTimer / groundingDuration) : 0f;
-        bool  active = (vfxState == VFXState.Grounding) || (fill > 0.005f);
-        groundingBorder.enabled    = active;
-        groundingBorder.fillAmount = fill;
-        groundingBorder.color      = groundingColor;
+        for (int i = activeRings.Count - 1; i >= 0; i--)
+        {
+            PulseRing ring = activeRings[i];
+            ring.elapsed += Time.deltaTime;
+
+            float t     = Mathf.Clamp01(ring.elapsed / ring.duration);
+            float tEase = 1f - Mathf.Pow(1f - t, 3f);
+            ring.rt.sizeDelta = new Vector2(tEase * ring.maxSize, tEase * ring.maxSize);
+
+            // Colour: flash near-white on spawn → ringColor by t = 0.35
+            float colorT = Mathf.Clamp01(t / 0.35f);
+            Color col    = Color.Lerp(ring.startColor, ringColor, colorT);
+
+            // Alpha: bloom lingers softly; sharp ring cuts off faster
+            float alpha = ring.isBloom
+                ? ringColor.a * 0.40f * Mathf.Pow(1f - t, 1.1f)
+                : ringColor.a * Mathf.Pow(1f - t, 1.8f);
+
+            ring.image.color = new Color(col.r, col.g, col.b, alpha);
+
+            if (ring.elapsed >= ring.duration)
+            {
+                Destroy(ring.rt.gameObject);
+                activeRings.RemoveAt(i);
+            }
+        }
+    }
+
+    void SpawnPulseRing()
+    {
+        if (vfxGroup == null) return;
+
+        float diag     = Mathf.Sqrt(Screen.width * (float)Screen.width + Screen.height * (float)Screen.height);
+        Color flashCol = Color.Lerp(Color.white, ringColor, 0.15f); // near-white flash
+
+        // Sharp leading edge
+        SpawnRingObject(ringTex,      diag, ringExpandDuration,        flashCol, false);
+        // Soft bloom halo — same speed, wider texture, lower alpha
+        SpawnRingObject(bloomRingTex, diag, ringExpandDuration * 1.15f, ringColor, true);
+    }
+
+    void SpawnRingObject(Texture2D tex, float maxSize, float duration, Color startColor, bool isBloom)
+    {
+        GameObject go = new GameObject(isBloom ? "PulseRingBloom" : "PulseRing");
+        go.transform.SetParent(vfxGroup.transform, false);
+
+        RectTransform rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot     = new Vector2(0.5f, 0.5f);
+        rt.sizeDelta = Vector2.zero;
+
+        Image img = go.AddComponent<Image>();
+        img.raycastTarget = false;
+        img.sprite = TexToSprite(tex);
+        img.color  = startColor;
+
+        activeRings.Add(new PulseRing
+        {
+            rt         = rt,
+            image      = img,
+            elapsed    = 0f,
+            duration   = duration,
+            maxSize    = maxSize,
+            startColor = startColor,
+            isBloom    = isBloom,
+        });
+    }
+
+    void UpdateBorderGlow()
+    {
+        bool shielded = (vfxState == VFXState.Shielded);
+
+        if (shielded)
+            shieldedFadeTimer = Mathf.Min(shieldedFadeTimer + Time.deltaTime, ShieldFadeInDur);
+
+        float fadeIn = shielded ? Mathf.SmoothStep(0f, 1f, shieldedFadeTimer / ShieldFadeInDur) : 0f;
+        float pulse  = (0.65f + 0.35f * Mathf.Sin(Time.time * borderPulseSpeed)) * fadeIn;
+
+        for (int i = 0; i < borderGlowEdges.Length; i++)
+        {
+            if (borderGlowEdges[i] == null) continue;
+            borderGlowEdges[i].enabled = shielded;
+            Color c = borderGlowColor;
+            borderGlowEdges[i].color = new Color(c.r, c.g, c.b, c.a * pulse);
+        }
+    }
+
+    void UpdateFloatParticles()
+    {
+        if (vfxState == VFXState.Shielded && !blowInProgress)
+        {
+            particleSpawnTimer += Time.deltaTime;
+            float interval = particlesPerSecond > 0 ? 1f / particlesPerSecond : 1f;
+            while (particleSpawnTimer >= interval)
+            {
+                SpawnFloatParticle();
+                particleSpawnTimer -= interval;
+            }
+        }
+
+        for (int i = activeParticles.Count - 1; i >= 0; i--)
+        {
+            FloatParticle p = activeParticles[i];
+            p.elapsed += Time.deltaTime;
+            p.rt.anchoredPosition += p.velocity * Time.deltaTime;
+
+            float t = p.elapsed / p.lifetime;
+            float alpha;
+            if      (t < 0.20f) alpha = t / 0.20f;
+            else if (t < 0.60f) alpha = 1f;
+            else                alpha = 1f - (t - 0.60f) / 0.40f;
+
+            float fadeIn = Mathf.SmoothStep(0f, 1f, shieldedFadeTimer / ShieldFadeInDur);
+            Color c = shieldParticleColor;
+            p.image.color = new Color(c.r, c.g, c.b, c.a * Mathf.Clamp01(alpha) * fadeIn);
+
+            if (p.elapsed >= p.lifetime)
+            {
+                Destroy(p.rt.gameObject);
+                activeParticles.RemoveAt(i);
+            }
+        }
+    }
+
+    void SpawnFloatParticle()
+    {
+        if (vfxGroup == null) return;
+
+        GameObject go = new GameObject("ShieldParticle");
+        go.transform.SetParent(vfxGroup.transform, false);
+
+        RectTransform rt = go.AddComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0.5f, 0.5f);
+        rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot     = new Vector2(0.5f, 0.5f);
+
+        float size = Random.Range(particleSizeRange.x, particleSizeRange.y);
+        rt.sizeDelta = new Vector2(size, size);
+
+        // Spawn along one of the four screen edges
+        float hw     = Screen.width  * 0.5f;
+        float hh     = Screen.height * 0.5f;
+        float margin = size * 0.5f + 8f;   // just inside the edge
+        Vector2 spawnPos, inward;
+        int edge = Random.Range(0, 4);
+        switch (edge)
+        {
+            case 0: // bottom
+                spawnPos = new Vector2(Random.Range(-hw, hw), -hh + margin);
+                inward   = new Vector2(Random.Range(-0.4f, 0.4f), 1f);
+                break;
+            case 1: // top
+                spawnPos = new Vector2(Random.Range(-hw, hw),  hh - margin);
+                inward   = new Vector2(Random.Range(-0.4f, 0.4f), -1f);
+                break;
+            case 2: // left
+                spawnPos = new Vector2(-hw + margin, Random.Range(-hh, hh));
+                inward   = new Vector2(1f, Random.Range(-0.4f, 0.4f));
+                break;
+            default: // right
+                spawnPos = new Vector2( hw - margin, Random.Range(-hh, hh));
+                inward   = new Vector2(-1f, Random.Range(-0.4f, 0.4f));
+                break;
+        }
+        rt.anchoredPosition = spawnPos;
+
+        Image img = go.AddComponent<Image>();
+        img.raycastTarget = false;
+        img.sprite = TexToSprite(circleTex);
+        img.color  = shieldParticleColor;
+
+        float speed = Random.Range(particleSpeedRange.x, particleSpeedRange.y);
+        Vector2 dir = inward;
+
+        activeParticles.Add(new FloatParticle
+        {
+            rt       = rt,
+            image    = img,
+            elapsed  = 0f,
+            lifetime = Random.Range(particleLifetimeRange.x, particleLifetimeRange.y),
+            velocity = dir.normalized * speed,
+        });
     }
 
     // ── Effect 5: Camera Shake (Level 3) ─────────────────────────────────────
@@ -676,9 +915,11 @@ public class InteractionVFXController : MonoBehaviour
 
     void EnterShielded()
     {
-        vfxState       = VFXState.Shielded;
-        groundingTimer = groundingDuration;
+        vfxState          = VFXState.Shielded;
+        groundingTimer    = groundingDuration;
+        shieldedFadeTimer = 0f;
         if (mainCamera != null) mainCamera.transform.localPosition = camOrigin;
+        for (int i = 0; i < 5; i++) SpawnFloatParticle();
     }
 
     // ── Blow: fade everything out ─────────────────────────────────────────────
@@ -731,9 +972,20 @@ public class InteractionVFXController : MonoBehaviour
         foreach (TouchGlassInstance inst in instances)
             if (inst.go != null) inst.go.SetActive(false);
 
-        // ── Phase 3: fade UI (border / overlay) out ──────────────────────────────
+        // ── Phase 3: fade UI out ──────────────────────────────────────────────────
+
+        // Fast-finish any lingering rings
+        foreach (PulseRing ring in activeRings) ring.elapsed = ring.duration;
+
+        // Jump particles into their fade-out phase
+        foreach (FloatParticle p in activeParticles)
+            if (p.elapsed < p.lifetime * 0.6f) p.elapsed = p.lifetime * 0.6f;
+
         Color startOverlay = colorOverlay    != null ? colorOverlay.color    : Color.clear;
         Color startBorder  = groundingBorder != null ? groundingBorder.color : Color.clear;
+        Color[] startGlow  = new Color[4];
+        for (int i = 0; i < 4; i++)
+            startGlow[i] = borderGlowEdges[i] != null ? borderGlowEdges[i].color : Color.clear;
 
         float elapsed = 0f;
         while (elapsed < blowFadeDuration)
@@ -744,6 +996,9 @@ public class InteractionVFXController : MonoBehaviour
                 colorOverlay.color    = new Color(startOverlay.r, startOverlay.g, startOverlay.b, startOverlay.a * t);
             if (groundingBorder != null)
                 groundingBorder.color = new Color(startBorder.r,  startBorder.g,  startBorder.b,  startBorder.a  * t);
+            for (int i = 0; i < 4; i++)
+                if (borderGlowEdges[i] != null)
+                    borderGlowEdges[i].color = new Color(startGlow[i].r, startGlow[i].g, startGlow[i].b, startGlow[i].a * t);
             yield return null;
         }
 
@@ -814,7 +1069,7 @@ public class InteractionVFXController : MonoBehaviour
 
     Canvas FindOrCreateCanvas()
     {
-        foreach (Canvas c in FindObjectsOfType<Canvas>())
+        foreach (Canvas c in FindObjectsByType<Canvas>(FindObjectsSortMode.None))
             if (c.renderMode == RenderMode.ScreenSpaceOverlay) return c;
 
         GameObject go = new GameObject("VFXCanvas");
@@ -851,7 +1106,7 @@ public class InteractionVFXController : MonoBehaviour
 
         Image img  = go.AddComponent<Image>();
         img.sprite = Sprite.Create(Texture2D.whiteTexture, new Rect(0, 0, 4, 4), Vector2.zero);
-        img.color  = groundingColor;
+        img.color  = Color.white;
         img.raycastTarget = false;
         img.type       = Image.Type.Filled;
         img.fillMethod = Image.FillMethod.Horizontal;
@@ -880,14 +1135,150 @@ public class InteractionVFXController : MonoBehaviour
         rt.offsetMax = new Vector2(0f, 12f);
     }
 
+    void SetupBorderGlow(GameObject parent)
+    {
+        // [0]=Left [1]=Right [2]=Top [3]=Bottom
+        // horiz=true → 32×1 gradient (used for left/right narrow strips)
+        // horiz=false → 1×32 gradient (used for top/bottom flat strips)
+        // flip controls which end of the gradient is opaque
+        bool[] horiz = { true,  true,  false, false };
+        bool[] flip  = { false, true,  true,  false };
+
+        string[] names = { "GlowLeft", "GlowRight", "GlowTop", "GlowBottom" };
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (borderGlowEdges[i] != null) continue;
+
+            GameObject go = new GameObject(names[i]);
+            go.transform.SetParent(parent.transform, false);
+
+            Image img = go.AddComponent<Image>();
+            img.raycastTarget = false;
+            img.enabled = false;
+            img.sprite  = TexToSprite(CreateGradTex(horiz[i], flip[i]));
+            img.color   = Color.clear;
+
+            RectTransform rt = img.rectTransform;
+            float w = Screen.height * borderGlowFraction;
+            switch (i)
+            {
+                case 0: rt.anchorMin=new Vector2(0,0); rt.anchorMax=new Vector2(0,1);
+                        rt.offsetMin=Vector2.zero; rt.offsetMax=new Vector2(w,0); break;
+                case 1: rt.anchorMin=new Vector2(1,0); rt.anchorMax=new Vector2(1,1);
+                        rt.offsetMin=new Vector2(-w,0); rt.offsetMax=Vector2.zero; break;
+                case 2: rt.anchorMin=new Vector2(0,1); rt.anchorMax=new Vector2(1,1);
+                        rt.offsetMin=new Vector2(0,-w); rt.offsetMax=Vector2.zero; break;
+                case 3: rt.anchorMin=new Vector2(0,0); rt.anchorMax=new Vector2(1,0);
+                        rt.offsetMin=Vector2.zero; rt.offsetMax=new Vector2(0,w); break;
+            }
+            borderGlowEdges[i] = img;
+        }
+    }
+
+    Texture2D CreateBloomRingTex(int size)
+    {
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        float half  = (size - 1) * 0.5f;
+        // Much wider ring with very soft inner and outer falloff
+        float outer = 0.96f;
+        float inner = Mathf.Clamp(outer - ringThickness * 2.5f, 0.05f, outer - 0.01f);
+        float soft  = 0.18f;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float d = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half)) / half;
+            float a;
+            if      (d < inner - soft || d > outer + soft) a = 0f;
+            else if (d < inner) a = Mathf.SmoothStep(0f, 1f, (d - (inner - soft)) / soft);
+            else if (d <= outer) a = 1f;
+            else                 a = Mathf.SmoothStep(0f, 1f, (outer + soft - d) / soft);
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        return tex;
+    }
+
+    Texture2D CreateRingTex(int size)
+    {
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        float half  = (size - 1) * 0.5f;
+        float outer = 0.94f;
+        float inner = Mathf.Clamp(outer - ringThickness, 0.01f, outer - 0.01f);
+        float soft  = 0.05f;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float d = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half)) / half;
+            float a;
+            if      (d < inner - soft || d > outer + soft) a = 0f;
+            else if (d < inner) a = Mathf.SmoothStep(0f, 1f, (d - (inner - soft)) / soft);
+            else if (d <= outer) a = 1f;
+            else                 a = Mathf.SmoothStep(0f, 1f, (outer + soft - d) / soft);
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        return tex;
+    }
+
+    Texture2D CreateCircleTex(int size)
+    {
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        float half = (size - 1) * 0.5f;
+        for (int y = 0; y < size; y++)
+        for (int x = 0; x < size; x++)
+        {
+            float d = Mathf.Sqrt((x - half) * (x - half) + (y - half) * (y - half)) / half;
+            float a = Mathf.Clamp01(1f - d * d * d);
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, a));
+        }
+        tex.Apply();
+        return tex;
+    }
+
+    Texture2D CreateGradTex(bool horizontal, bool flip)
+    {
+        int w = horizontal ? 32 : 1;
+        int h = horizontal ? 1  : 32;
+        var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+        tex.wrapMode = TextureWrapMode.Clamp;
+        int n = Mathf.Max(w, h);
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / Mathf.Max(1, n - 1);
+            float a = flip ? t : 1f - t;
+            a = a * a * (3f - 2f * a); // smoothstep
+            Color col = new Color(1f, 1f, 1f, a);
+            if (horizontal) tex.SetPixel(i, 0, col);
+            else            tex.SetPixel(0, i, col);
+        }
+        tex.Apply();
+        return tex;
+    }
+
+    Sprite TexToSprite(Texture2D tex)
+    {
+        return Sprite.Create(tex,
+            new Rect(0, 0, tex.width, tex.height),
+            new Vector2(0.5f, 0.5f));
+    }
+
     void ResetUI()
     {
         if (colorOverlay    != null) colorOverlay.color = Color.clear;
         if (groundingBorder != null)
         {
             groundingBorder.fillAmount = 0f;
-            groundingBorder.color      = groundingColor;
             groundingBorder.enabled    = false;
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            if (borderGlowEdges[i] == null) continue;
+            borderGlowEdges[i].color   = Color.clear;
+            borderGlowEdges[i].enabled = false;
         }
         if (vfxGroup != null) vfxGroup.alpha = 1f;
 
@@ -903,9 +1294,20 @@ public class InteractionVFXController : MonoBehaviour
         }
         activeStars.Clear();
 
-        vfxState       = VFXState.Normal;
-        groundingTimer = 0f;
-        prevIsTouching = 0;
+        foreach (PulseRing ring in activeRings)
+            if (ring.rt != null) Destroy(ring.rt.gameObject);
+        activeRings.Clear();
+        ringsSpawned = 0;
+
+        foreach (FloatParticle p in activeParticles)
+            if (p.rt != null) Destroy(p.rt.gameObject);
+        activeParticles.Clear();
+        particleSpawnTimer = 0f;
+
+        vfxState          = VFXState.Normal;
+        groundingTimer    = 0f;
+        shieldedFadeTimer = 0f;
+        prevIsTouching    = 0;
 
         ResetUI();
 

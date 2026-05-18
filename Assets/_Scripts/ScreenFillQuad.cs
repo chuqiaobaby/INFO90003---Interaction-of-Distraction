@@ -42,6 +42,7 @@ public class ScreenFillQuad : MonoBehaviour
         lastFov        = targetCamera.fieldOfView;
         lastOrthoSize  = targetCamera.orthographicSize;
 
+        if (Screen.height == 0) return;
         float aspect = (float)Screen.width / Screen.height;
         float halfH  = targetCamera.orthographic
             ? targetCamera.orthographicSize

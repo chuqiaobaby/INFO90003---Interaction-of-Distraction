@@ -107,14 +107,21 @@ public class DistractionManager : MonoBehaviour
 
         if (input == null)
         {
-            hardwareLevel = 0; isTouching = 0; isGrounding = 0; isBlowing = 0;
+            // No DeviceInputManager — full keyboard fallback
+            if      (Input.GetKeyDown(KeyCode.Alpha0)) hardwareLevel = 0;
+            else if (Input.GetKeyDown(KeyCode.Alpha1)) hardwareLevel = 1;
+            else if (Input.GetKeyDown(KeyCode.Alpha2)) hardwareLevel = 2;
+            else if (Input.GetKeyDown(KeyCode.Alpha3)) hardwareLevel = 3;
+            isTouching  = Input.GetKey(KeyCode.Space)  ? 1 : 0;
+            isGrounding = Input.GetKey(KeyCode.Return) ? 1 : 0;
+            isBlowing   = Input.GetKeyDown(KeyCode.B)  ? 1 : 0;
             return;
         }
 
         hardwareLevel = Mathf.Clamp(input.Level, 0, 3);
-        isTouching = input.isTouching;
+        isTouching  = input.isTouching;
         isGrounding = input.isGrounding;
-        isBlowing = input.isBlowing;
+        isBlowing   = input.isBlowing;
     }
 
     private void UpdateWaterLevelEffect()
