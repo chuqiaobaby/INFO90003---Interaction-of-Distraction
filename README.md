@@ -1,6 +1,6 @@
 # Mon 18 May — Hand Tracking Progress Summary
 
-I use https://github.com/homuler/MediaPipeUnityPlugin this for hadn tracking.
+I use https://github.com/homuler/MediaPipeUnityPlugin this for hand tracking.
 
 ## 1. Hand Tracking Implementation
 
