@@ -26,4 +26,11 @@ Media Pipe Hand Visible Triggers Ripple
 
 After this, the system will fall back to mouse coordinates for testing instead of camera-triggered ripples.
 
+## 3. Next Step
+
+- Review Owen’s Arduino code
+- Connect Arduino sensor input with Unity ripple effects-
+- Continue refining the interaction effects
+
+
 
