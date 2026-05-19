@@ -12,16 +12,16 @@
  */
 
 // Uncomment to see sound sensor values for calibration
-//#define DEBUG_SOUND
+#define DEBUG_SOUND
 
 #include <FastLED.h>
 
-#define LED_PIN         12
+#define LED_PIN         13
 #define NUM_LEDS        150
 #define BRIGHTNESS      100
 
 #define TOUCH_PIN       4
-#define TOUCH_THRESHOLD 400
+#define TOUCH_THRESHOLD 800
 
 CRGB leds[NUM_LEDS];
 
@@ -54,7 +54,16 @@ int pulseDirection = 1;
 // ====== GROUNDING SENSORS (LDRs) ======
 const int ldrLeft  = 34;
 const int ldrRight = 39;
-const int DARK_THRESHOLD = 160;  // Calibrate as needed
+const int DARK_THRESHOLD = 160;  // Calibrate as needed to esnure LDRs are covered
+
+// ================= MOTOR =================
+const int motorDIR = 12; 
+const int motorPWM = 27;
+
+// Motor State
+const unsigned int MOTOR_RUNTIME = 10000;
+unsigned long motorStartTime = 0;
+bool motorActive = false;
 
 // ====== SOUND SENSOR (BLOWING) ======
 // Using DIGITAL output (DO pin)
@@ -63,7 +72,13 @@ const int DARK_THRESHOLD = 160;  // Calibrate as needed
 // LOW  (0) = sound detected
 const int soundPin = 33;
 
-const int BLOW_DURATION_MS = 150;
+const int BLOW_DURATION_MS = 120;
+const int SOUND_WINDOW_MS = 200;
+unsigned long soundWindowStart = 0;
+int soundHighCount = 0;
+
+bool stableBlowing = false;
+bool isBlowing = false;
 
 // Blow detection timing
 unsigned long blowStartTime = 0;
@@ -81,8 +96,13 @@ void setup() {
   
   // Sound sensors
   pinMode(soundPin, INPUT);
-  
-  // LDR sensors are analog inputs (no pinMode needed)
+
+  // Motor
+  pinMode(motorDIR, OUTPUT);
+  pinMode(motorPWM, OUTPUT);
+
+  digitalWrite(motorDIR, LOW);
+  analogWrite(motorPWM, 0);
 }
 
 void loop() {
@@ -107,29 +127,55 @@ void loop() {
   int rightValue = analogRead(ldrRight);
   bool isGrounding = (leftValue < DARK_THRESHOLD) && (rightValue < DARK_THRESHOLD) ? 1 : 0;
   
-// ====== READ SOUND SENSOR (0 or 1) ======
-// Sensor logic:
-// LOW  (0) = idle / no blow
-// HIGH (1) = blowing detected
-bool soundDetected = digitalRead(soundPin) == HIGH;
+// ====== SOUND SENSOR ======
 
-// Duration filtering: require sustained sound
 unsigned long currentTime = millis();
 
-if (soundDetected) {
-  if (blowStartTime == 0) {
-    blowStartTime = currentTime;
-  } 
-  else if ((currentTime - blowStartTime) >= BLOW_DURATION_MS) {
-    blowDetected = true;
-  }
-} else {
-  blowStartTime = 0;
-  blowDetected = false;
+int rawSound = digitalRead(soundPin);
+
+// start window
+if (soundWindowStart == 0) {
+  soundWindowStart = currentTime;
 }
 
-// Final Unity output
-int isBlowing = soundDetected ? 1 : 0;
+// count highs in window
+if (rawSound == HIGH) {
+  soundHighCount++;
+}
+
+// end window → evaluate
+if (currentTime - soundWindowStart >= SOUND_WINDOW_MS) {
+
+  if (soundHighCount > (SOUND_WINDOW_MS / 20) * 0.6) {
+    stableBlowing = true;
+  } else {
+    stableBlowing = false;
+  }
+
+  // reset window
+  soundWindowStart = currentTime;
+  soundHighCount = 0;
+  }
+
+  isBlowing = stableBlowing ? 1 : 0;
+
+//Motor Control
+if(isBlowing == 1 && !motorActive){
+  digitalWrite(motorDIR, LOW);
+  analogWrite(motorPWM, 200);
+
+  motorStartTime = currentTime;
+
+  motorActive = true;
+} else {
+  if(currentTime - motorStartTime >= MOTOR_RUNTIME){
+    digitalWrite(motorDIR, LOW);
+    analogWrite(motorPWM, 0);
+
+    motorActive = false;
+    motorStartTime = 0;
+  }
+}
   
   if (currentTime - lastLedUpdate >= LED_UPDATE_INTERVAL) {
   lastLedUpdate = currentTime;
@@ -167,12 +213,12 @@ int isBlowing = soundDetected ? 1 : 0;
   if (currentTime - lastSerialUpdate >= SERIAL_UPDATE_INTERVAL) {
     lastSerialUpdate = currentTime;
 
-/*#ifdef DEBUG_SOUND
+#ifdef DEBUG_SOUND
 Serial.print("Sound: ");
 Serial.print(digitalRead(soundPin));
 Serial.print(" | Blowing: ");
 Serial.println(isBlowing);
-#endif*/
+#endif
 
   /*int high = analogRead(sensorHigh);
   Serial.print("Water High:");
