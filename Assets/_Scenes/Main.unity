@@ -211,9 +211,8 @@ MonoBehaviour:
   useHardwareInput: 0
   portName: COM3
   baudRate: 115200
-  blowConfirmFrames: 3
   blowCooldownSeconds: 2
-  showDebugOverlay: 0
+  showDebugOverlay: 1
   Level: 0
   isTouching: 0
   isGrounding: 0
@@ -537,17 +536,20 @@ MonoBehaviour:
   ringThickness: 0.02
   borderGlowColor: {r: 1, g: 1, b: 1, a: 0.81960785}
   borderPulseSpeed: 2.5
-  borderGlowFraction: 0.12
+  borderGlowFraction: 0.17
   shieldParticleColor: {r: 1, g: 1, b: 1, a: 1}
   particlesPerSecond: 20
   particleSizeRange: {x: 3, y: 5.58}
   particleLifetimeRange: {x: 1, y: 2.5}
   particleSpeedRange: {x: 50, y: 150}
   liquidGlassMaterial: {fileID: 2100000, guid: c2e747ce29dc632478f4ef2120022b20, type: 2}
-  touchEffectPixelSize: {x: 380, y: 380}
+  touchEffectPixelSize: {x: 600, y: 600}
   touchEffectDepth: 2
   touchEffectPadding: 0.055
   touchGlassMaxOpacity: 0.95
+  touchRepeatInterval: 0.5
+  syncTouchColors: 1
+  syncCoreColor: {r: 0.1, g: 2, b: 3, a: 1}
   touchSpawnDuration: 0.521
   touchDespawnDuration: 0.82
   shakeAmount: 4
@@ -838,6 +840,8 @@ MonoBehaviour:
   mirrorRenderer: {fileID: 0}
   overlayRenderer: {fileID: 2002628598}
   transitionSpeed: 2.8
+  fractureShockIntensity: 0.2
+  fractureShockDuration: 0.42
   cleanState:
     mirrorState: 0
     crackStrength: 0
@@ -849,35 +853,35 @@ MonoBehaviour:
     darken: 0
     contrast: 1
   state1:
-    mirrorState: 1
-    crackStrength: 0.42
-    distortionStrength: 0.006
-    rippleStrength: 0.001
-    blurStrength: 0.025
-    chromaticStrength: 0
-    instability: 0
-    darken: 0.14
-    contrast: 1.02
+    mirrorState: 1.3
+    crackStrength: 0.09
+    distortionStrength: 0.096
+    rippleStrength: 0.014
+    blurStrength: 0.31
+    chromaticStrength: 0.022
+    instability: 0.27
+    darken: 0.31
+    contrast: 1.03
   state2:
     mirrorState: 2
-    crackStrength: 0.72
-    distortionStrength: 0.018
-    rippleStrength: 0.002
-    blurStrength: 0.11
+    crackStrength: 0
+    distortionStrength: 0.08
+    rippleStrength: 0
+    blurStrength: 0.58
     chromaticStrength: 0.0025
     instability: 0.06
-    darken: 0.36
-    contrast: 1.04
+    darken: 0.58
+    contrast: 1.03
   state3:
     mirrorState: 3
-    crackStrength: 0.45
-    distortionStrength: 0.017
-    rippleStrength: 0.004
-    blurStrength: 0.22
-    chromaticStrength: 0.009
-    instability: 0.22
-    darken: 0.68
-    contrast: 1.12
+    crackStrength: 0.18
+    distortionStrength: 0.056
+    rippleStrength: 0.011
+    blurStrength: 0.27
+    chromaticStrength: 0.018
+    instability: 0.49
+    darken: 0.76
+    contrast: 1.1
 --- !u!64 &876773102
 MeshCollider:
   m_ObjectHideFlags: 0
@@ -967,7 +971,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 141.01016, y: 57.735027, z: 1}
+  m_LocalScale: {x: 118.638435, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1232,7 +1236,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 141.01016, y: 57.735027, z: 1}
+  m_LocalScale: {x: 118.638435, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}

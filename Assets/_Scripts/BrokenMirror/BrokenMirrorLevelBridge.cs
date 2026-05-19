@@ -65,11 +65,13 @@ public sealed class BrokenMirrorLevelBridge : MonoBehaviour
             return;
         }
 
-        // Drive mirror state from water level
+        // Drive mirror state from water level: only advances forward, never retreats.
+        // Shielded state also blocks changes. Only ResetMirror() (via blow) clears it.
         if (level != _lastLevel)
         {
             _lastLevel = level;
-            mirrorFractureController.SetFractureState(level);
+            if (!shieldedNow && level > mirrorFractureController.ActiveState)
+                mirrorFractureController.SetFractureState(level);
         }
     }
 }

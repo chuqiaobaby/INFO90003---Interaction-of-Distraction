@@ -44,6 +44,7 @@ Material:
     - _IriOffset: 0.18
     - _MetalF0: 0.713
     - _NoiseScale: 1.72
+    - _Opacity: 1
     - _RadialBias: 1.58
     - _RingEmission: 7.9
     - _RingRadius: 0.125
@@ -69,10 +70,10 @@ Material:
     - _TotalSize: 0.76
     - _WarpAmount: 7.09
     m_Colors:
-    - _Color1: {r: 0.36107165, g: 0.073584795, b: 1, a: 1}
-    - _Color2: {r: 0.073029436, g: 0.9924528, b: 0.97510517, a: 1}
-    - _Color3: {r: 1, g: 0, b: 0.23990822, a: 1}
-    - _Color4: {r: 1, g: 0.74419844, b: 0, a: 1}
+    - _Color1: {r: 0.72680455, g: 0.26226407, b: 1, a: 1}
+    - _Color2: {r: 0.2075542, g: 0.89433956, b: 0.83356214, a: 1}
+    - _Color3: {r: 1, g: 0.20188677, b: 0.3928081, a: 1}
+    - _Color4: {r: 0.0051049455, g: 0.08766789, b: 0.90188676, a: 1}
     - _CoreColor: {r: 1.2, g: 0.9, b: 1, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

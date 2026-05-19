@@ -27,6 +27,14 @@ Material:
         m_Texture: {fileID: 2800000, guid: d599815973def1548b2b919be2ce0a42, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
+    - _CrackTexLayer1:
+        m_Texture: {fileID: 2800000, guid: ccb0ac3a7c6e465fbe73caa269650792, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - _CrackTexLayer2:
+        m_Texture: {fileID: 2800000, guid: 682ad4c9fe3e46e78325d85df44c7ad6, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _WebcamTex:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -40,6 +48,7 @@ Material:
     - _Darken: 0
     - _DistortionStrength: 0
     - _FlipX: 1
+    - _FractureShock: 0
     - _Instability: 0
     - _MirrorState: 0
     - _RippleStrength: 0

@@ -4,6 +4,8 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
     {
         _WebcamTex ("Webcam Texture", 2D) = "black" {}
         _CrackTex ("Crack Mask", 2D) = "black" {}
+        _CrackTexLayer1 ("Layer 1 Crack Mask", 2D) = "black" {}
+        _CrackTexLayer2 ("Layer 2 Crack Mask", 2D) = "black" {}
         _Tint ("Reflection Tint", Color) = (1, 1, 1, 1)
         _CrackColor ("Crack Color", Color) = (0.72, 0.9, 1.0, 1)
         _MirrorState ("Mirror State", Range(0, 3)) = 0
@@ -13,6 +15,7 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
         _BlurStrength ("Crack Blur", Range(0, 1)) = 0
         _ChromaticStrength ("Chromatic Aberration", Range(0, 0.05)) = 0
         _Instability ("Reflection Instability", Range(0, 1)) = 0
+        _FractureShock ("Fracture Shock", Range(0, 1)) = 0
         _Darken ("Mirror Darken", Range(0, 1)) = 0
         _Contrast ("Reflection Contrast", Range(0.5, 2)) = 1
         _FlipX ("Flip Webcam X", Float) = 0
@@ -41,8 +44,12 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
 
             sampler2D _WebcamTex;
             sampler2D _CrackTex;
+            sampler2D _CrackTexLayer1;
+            sampler2D _CrackTexLayer2;
             float4 _WebcamTex_ST;
             float4 _CrackTex_ST;
+            float4 _CrackTexLayer1_ST;
+            float4 _CrackTexLayer2_ST;
             half4 _Tint;
             half4 _CrackColor;
             half _MirrorState;
@@ -52,6 +59,7 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
             half _BlurStrength;
             half _ChromaticStrength;
             half _Instability;
+            half _FractureShock;
             half _Darken;
             half _Contrast;
             half _FlipX;
@@ -80,10 +88,14 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
 
             float CrackMask(float2 uv)
             {
+                float layer1 = tex2D(_CrackTexLayer1, TRANSFORM_TEX(uv, _CrackTexLayer1)).r;
+                float layer2 = tex2D(_CrackTexLayer2, TRANSFORM_TEX(uv, _CrackTexLayer2)).r;
                 float primary = tex2D(_CrackTex, TRANSFORM_TEX(uv, _CrackTex)).r;
                 float secondary = tex2D(_CrackTex, TRANSFORM_TEX(uv * 1.73 + float2(0.17, 0.31), _CrackTex)).r;
                 float tertiary = tex2D(_CrackTex, TRANSFORM_TEX(uv * 2.61 + float2(0.61, 0.09), _CrackTex)).r;
-                return saturate(primary + secondary * saturate(_MirrorState - 0.7) * 0.55 + tertiary * saturate(_MirrorState - 1.8) * 0.45);
+                float cinematic = saturate(primary + secondary * 0.55 + tertiary * 0.45);
+                float stage12 = saturate(layer1 * saturate(_MirrorState) + layer2 * saturate(_MirrorState - 1.0));
+                return lerp(stage12, cinematic, saturate(_MirrorState - 2.0));
             }
 
             float2 CrackGradient(float2 uv)
@@ -164,28 +176,32 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
                 float hairline = smoothstep(0.42, 0.86, crack) * state1;
                 float crackEdge = smoothstep(0.10, 0.74, crack) * saturate(0.28 + state2 * 0.58 + state3 * 0.7);
                 float glassEdge = smoothstep(0.16, 0.58, crack) * smoothstep(1.0, 0.10, crack) * saturate(state2 + state3);
+                float impactRing = 1.0 - smoothstep(0.02, 0.33, abs(distance(uv, float2(0.58, 0.48)) - (0.18 + _FractureShock * 0.42)));
+                impactRing *= _FractureShock * saturate(state01 * 2.0);
 
                 float rippleA = sin((uv.y * 42.0) + t * 1.35);
                 float rippleB = sin((uv.x * 58.0) - t * 0.92);
                 float rippleC = sin((uv.x + uv.y) * 31.0 + t * 0.57);
-                float2 ripple = float2(rippleA + rippleC, rippleB - rippleC) * _RippleStrength * (0.08 + state01 * 0.35);
+                float2 ripple = float2(rippleA + rippleC, rippleB - rippleC) * (_RippleStrength + _FractureShock * 0.004) * (0.08 + state01 * 0.35);
 
                 float2 crackNormal = CrackGradient(uv);
                 float instabilityPulse = sin(t * 6.2 + uv.y * 17.0) * sin(t * 2.3 + uv.x * 11.0);
                 float2 unstable = float2(instabilityPulse, sin(t * 4.1 + uv.x * 9.5)) * _Instability * 0.004;
                 float2 shardSlip = ShardOffset(uv, state2, state3);
                 shardSlip += crackNormal * (_DistortionStrength * (hairline * 0.15 + crackEdge * 0.9 + glassEdge * 0.55));
+                shardSlip += crackNormal * (_FractureShock * 0.018 * saturate(crackEdge + impactRing));
 
                 float2 distortedUv = uv + ripple + shardSlip + unstable * state01;
-                float blurRadius = lerp(0.0015, 0.010, _BlurStrength) * saturate(crackEdge + state01 * 0.25);
+                float blurRadius = lerp(0.0015, 0.010, _BlurStrength + _FractureShock * 0.18) * saturate(crackEdge + state01 * 0.25 + impactRing * 0.3);
 
                 half3 baseReflection = WebcamSample(distortedUv);
                 half3 blurredReflection = BlurSample(distortedUv, blurRadius);
                 half blurMix = saturate(_BlurStrength * (crackEdge * 0.85 + state01 * 0.18));
                 half3 reflection = lerp(baseReflection, blurredReflection, blurMix);
 
-                float2 chromaOffset = (crackNormal * 0.55 + shardSlip * 10.0 + unstable * 4.0) * _ChromaticStrength * (0.18 + crackEdge);
-                if (_ChromaticStrength > 0.0001)
+                float chromaStrength = _ChromaticStrength + _FractureShock * 0.012;
+                float2 chromaOffset = (crackNormal * 0.55 + shardSlip * 10.0 + unstable * 4.0) * chromaStrength * (0.18 + crackEdge + impactRing * 0.6);
+                if (chromaStrength > 0.0001)
                 {
                     reflection.r = WebcamSample(distortedUv + chromaOffset).r;
                     reflection.b = WebcamSample(distortedUv - chromaOffset).b;
@@ -203,6 +219,9 @@ Shader "BrokenMirror/URP/Broken Mirror Webcam"
                 half3 crackShadow = reflection * (1.0 - saturate((hairline * 0.115 + crackEdge * 0.145 + glassEdge * 0.07) * _CrackStrength));
                 half3 color = crackShadow + edgeTint;
                 color += pow(saturate(glassEdge), 2.0) * _CrackStrength * 0.032;
+                half3 shockGlow = _CrackColor.rgb * (impactRing * 0.12 + crackEdge * _FractureShock * 0.09)
+                                + half3(1.0, 0.92, 0.78) * hairline * _FractureShock * 0.08;
+                color = 1.0 - (1.0 - saturate(color)) * (1.0 - saturate(shockGlow));
 
                 float scan = sin((uv.y + t * 0.035) * 420.0) * 0.5 + 0.5;
                 color += scan * _Instability * 0.012 * state3;

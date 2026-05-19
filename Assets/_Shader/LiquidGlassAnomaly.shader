@@ -77,6 +77,7 @@ Shader "Custom/LiquidGlassAnomaly"
         _TimeOffset         ("Instance Time Offset",                   Float) = 0.0
         _SpawnProgress      ("Spawn / Despawn Progress",               Range(0.0, 1.0)) = 0.5
         _BlowFade           ("Blow Fade Multiplier",                   Range(0.0, 1.0)) = 1.0
+        _Opacity            ("Overall Opacity",                        Range(0.0, 1.0)) = 1.0
         _DissolveProgress   ("Dissolve-to-Sparkles Progress",          Range(0.0, 1.0)) = 0.0
         _SparkleScale       ("Sparkle Cell Scale",                     Range(10,  120))  = 55
         _SparkleGlow        ("Sparkle Glow Intensity",                 Range(0.0,  8.0)) = 4.0
@@ -154,6 +155,7 @@ Shader "Custom/LiquidGlassAnomaly"
                 float  _TimeOffset;
                 float  _SpawnProgress;
                 float  _BlowFade;
+                float  _Opacity;
                 float  _DissolveProgress;
                 float  _SparkleScale;
                 float  _SparkleGlow;
@@ -578,7 +580,7 @@ Shader "Custom/LiquidGlassAnomaly"
                 // ── Alpha ─────────────────────────────────────────────────────
                 // Gaps use _GapOpacity so the distorted refraction sample shows.
                 // Strokes are fully opaque (alpha = 1).
-                float alpha = lerp(_GapOpacity, 1.0f, strokeMask) * radialAlpha * edgeFade * lifeFade * softEdge * _BlowFade;
+                float alpha = lerp(_GapOpacity, 1.0f, strokeMask) * radialAlpha * edgeFade * lifeFade * softEdge * _BlowFade * _Opacity;
                 alpha = saturate(alpha);
 
                 // ── Dissolve to sparkles ──────────────────────────────────────

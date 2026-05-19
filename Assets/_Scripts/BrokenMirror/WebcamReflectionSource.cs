@@ -16,6 +16,9 @@ public sealed class WebcamReflectionSource : MonoBehaviour
     private Material      runtimeMaterial;
     private int           texturePropertyId;
 
+    private static readonly int s_AspectCorrId = Shader.PropertyToID("_AspectRatioCorrection");
+    private int _lastScreenW, _lastScreenH, _lastCamW, _lastCamH;
+
     public bool IsUsingWebcam => webcamTexture != null && webcamTexture.isPlaying;
 
     private void Awake()
@@ -111,6 +114,35 @@ public sealed class WebcamReflectionSource : MonoBehaviour
 
         if (runtimeMaterial != null)
             runtimeMaterial.SetTexture(texturePropertyId, fallbackTexture);
+    }
+
+    private void Update()
+    {
+        if (runtimeMaterial == null) return;
+
+        // WebCamTexture reports 16×16 before the first real frame arrives — ignore that.
+        int cw = (webcamTexture != null && webcamTexture.isPlaying && webcamTexture.width > 16)
+                 ? webcamTexture.width : 0;
+        int ch = (webcamTexture != null && webcamTexture.isPlaying && webcamTexture.height > 16)
+                 ? webcamTexture.height : 0;
+
+        int sw = Screen.width;
+        int sh = Screen.height;
+
+        if (sw == _lastScreenW && sh == _lastScreenH && cw == _lastCamW && ch == _lastCamH) return;
+        _lastScreenW = sw; _lastScreenH = sh; _lastCamW = cw; _lastCamH = ch;
+
+        float corrX = 1f, corrY = 1f;
+        if (sh > 0 && cw > 0 && ch > 0)
+        {
+            // Center-crop: scale webcam to fill screen, crop the longer dimension.
+            float screenAspect = (float)sw / sh;
+            float camAspect    = (float)cw / ch;
+            corrX = Mathf.Min(1f, screenAspect / camAspect);
+            corrY = Mathf.Min(1f, camAspect    / screenAspect);
+        }
+
+        runtimeMaterial.SetVector(s_AspectCorrId, new Vector4(corrX, corrY, 0f, 0f));
     }
 
     private void OnDestroy()

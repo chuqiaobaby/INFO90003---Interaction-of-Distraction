@@ -62,6 +62,18 @@ public class InteractionVFXController : MonoBehaviour
     [Range(0f, 1f)]
     public float touchGlassMaxOpacity = 0.95f;
 
+    [Tooltip("While hand stays in water, spawn a new effect every N seconds. Set 0 to disable.")]
+    [Range(0f, 5f)]
+    public float touchRepeatInterval = 0.5f;
+
+    [Tooltip("When on, all simultaneous touch effects share the same colour (cycle in sync). " +
+             "When off, each effect gets a random hue.")]
+    public bool syncTouchColors = true;
+    [Tooltip("Core colour used by all effects when Sync Touch Colors is on. " +
+             "Supports HDR — raise intensity for stronger glow.")]
+    [ColorUsage(true, true)]
+    public Color syncCoreColor = new Color(0.1f, 2.0f, 3.0f, 1f);
+
     [Tooltip("Fixed time (seconds) for the spawn-in animation regardless of effect lifetime.")]
     [Range(0.05f, 1.0f)]
     public float touchSpawnDuration = 0.30f;
@@ -205,7 +217,8 @@ public class InteractionVFXController : MonoBehaviour
     private static readonly int s_TimeOffsetId      = Shader.PropertyToID("_TimeOffset");
     private static readonly int s_StarAlphaId       = Shader.PropertyToID("_Alpha");
 
-    private int prevIsTouching = 0;
+    private int   prevIsTouching    = 0;
+    private float _touchRepeatTimer = 0f;
 
     // Keyboard-fallback level (persists between frames when hw is null)
     private int _kbLevel = 0;
@@ -447,8 +460,26 @@ public class InteractionVFXController : MonoBehaviour
         bool isRisingEdge = touching && (prevIsTouching == 0);
         prevIsTouching    = isTouchingValue;
 
-        if (isRisingEdge)
+        bool canSpawn = (vfxState != VFXState.Grounding);
+
+        if (isRisingEdge && canSpawn)
+        {
             SpawnTouchGlassInstance();
+            _touchRepeatTimer = 0f;
+        }
+        else if (touching && touchRepeatInterval > 0f && canSpawn)
+        {
+            _touchRepeatTimer += Time.deltaTime;
+            while (_touchRepeatTimer >= touchRepeatInterval)
+            {
+                SpawnTouchGlassInstance();
+                _touchRepeatTimer -= touchRepeatInterval;
+            }
+        }
+        else
+        {
+            _touchRepeatTimer = 0f;
+        }
 
         // Tick every active instance independently
         for (int i = activeInstances.Count - 1; i >= 0; i--)
@@ -635,38 +666,48 @@ public class InteractionVFXController : MonoBehaviour
         float fadeTime = (dm != null) ? dm.CurrentFadeTime : 1.5f;
 
         // ── Per-instance visual randomisation ─────────────────────────────────
-        // Hue: shift each instance to a different segment of the iridescence cycle
-        mat.SetFloat("_IriOffset", Random.value);
-
-        // Shape: unique noise seed → unique organic blob silhouette each spawn
+        // Shape seeds: always randomised so each blob has a unique silhouette
         mat.SetFloat("_ShapeIrregularity", Random.Range(0.18f, 0.35f));
         mat.SetFloat("_ShapeOffsetX",      Random.Range(0f, 100f));
         mat.SetFloat("_ShapeOffsetY",      Random.Range(0f, 100f));
         mat.SetFloat(s_RotationOffsetId,   Random.Range(0f, Mathf.PI * 2f));
-        mat.SetFloat(s_TimeOffsetId,       Random.Range(0f, 100f));
 
-        // Core colour: cycle through vivid HDR hues so simultaneous instances
-        // are visually distinct even without looking at the blob shape
-        Color[] coreHues =
+        if (syncTouchColors)
         {
-            new Color(3.0f, 0.4f, 0.1f, 1f),   // hot orange
-            new Color(0.1f, 2.5f, 0.5f, 1f),   // electric green
-            new Color(0.4f, 0.1f, 3.0f, 1f),   // deep violet
-            new Color(2.8f, 0.1f, 1.2f, 1f),   // magenta-pink
-            new Color(0.1f, 2.0f, 3.0f, 1f),   // electric cyan
-            new Color(3.0f, 2.2f, 0.1f, 1f),   // gold-yellow
-            new Color(0.1f, 0.8f, 2.8f, 1f),   // sky blue
-            new Color(2.5f, 0.1f, 0.5f, 1f),   // crimson
-        };
-        mat.SetColor("_CoreColor", coreHues[Random.Range(0, coreHues.Length)]);
-
-        // Extra variety: randomise glow energy so instances feel different in weight
-        mat.SetFloat("_IriIntensity", Random.Range(1.8f, 4.5f));
-        mat.SetFloat("_TendrilGlow",  Random.Range(1.2f, 4.5f));
-        mat.SetFloat("_CoreEmission", Random.Range(8f,  22f));
+            // _TimeOffset = 0 aligns every instance's colour clock to _Time.y,
+            // so palT = frac(spatial + _Time.y * _ColorSpeed * 0.06) is identical
+            // across all blobs at the same moment → colours cycle in sync.
+            mat.SetFloat(s_TimeOffsetId,   0f);
+            mat.SetFloat("_IriOffset",     0f);
+            mat.SetColor("_CoreColor",     syncCoreColor);
+            mat.SetFloat("_IriIntensity",  3.0f);
+            mat.SetFloat("_TendrilGlow",   3.0f);
+            mat.SetFloat("_CoreEmission",  15f);
+        }
+        else
+        {
+            mat.SetFloat(s_TimeOffsetId,   Random.Range(0f, 100f));
+            mat.SetFloat("_IriOffset",     Random.value);
+            Color[] coreHues =
+            {
+                new Color(3.0f, 0.4f, 0.1f, 1f),
+                new Color(0.1f, 2.5f, 0.5f, 1f),
+                new Color(0.4f, 0.1f, 3.0f, 1f),
+                new Color(2.8f, 0.1f, 1.2f, 1f),
+                new Color(0.1f, 2.0f, 3.0f, 1f),
+                new Color(3.0f, 2.2f, 0.1f, 1f),
+                new Color(0.1f, 0.8f, 2.8f, 1f),
+                new Color(2.5f, 0.1f, 0.5f, 1f),
+            };
+            mat.SetColor("_CoreColor",     coreHues[Random.Range(0, coreHues.Length)]);
+            mat.SetFloat("_IriIntensity",  Random.Range(1.8f, 4.5f));
+            mat.SetFloat("_TendrilGlow",   Random.Range(1.2f, 4.5f));
+            mat.SetFloat("_CoreEmission",  Random.Range(8f,  22f));
+        }
         // ─────────────────────────────────────────────────────────────────────
 
         mat.SetFloat(s_SpawnProgressId, 0.0f);
+        mat.SetFloat("_Opacity", touchGlassMaxOpacity);
         go.SetActive(true);
 
         activeInstances.Add(new TouchGlassInstance
@@ -678,8 +719,6 @@ public class InteractionVFXController : MonoBehaviour
             elapsed  = 0f
         });
 
-        Debug.Log($"[VFX] TouchGlass spawned at viewport ({vx:F2}, {vy:F2})  " +
-                  $"fadeTime={fadeTime:F1}s  active={activeInstances.Count}");
     }
 
     // ── Effect 3 / 4: Pulse Rings + Border Glow ──────────────────────────────
@@ -1308,6 +1347,7 @@ public class InteractionVFXController : MonoBehaviour
         groundingTimer    = 0f;
         shieldedFadeTimer = 0f;
         prevIsTouching    = 0;
+        _touchRepeatTimer = 0f;
 
         ResetUI();
 

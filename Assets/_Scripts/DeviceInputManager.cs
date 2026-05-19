@@ -18,10 +18,9 @@ using UnityEngine;
 ///   B         → blow pulse
 ///
 /// Blow debounce (hardware mode only):
-///   The raw sensor signal must read 1 for BlowConfirmFrames consecutive Unity frames
-///   before a blow is confirmed. After confirmation, BlowCooldownSeconds must elapse
-///   before the next blow can be registered. This prevents accidental triggers from
-///   talking, movement, or sensor noise.
+///   Duration filtering is done on the Arduino (BLOW_DURATION_MS). Unity detects the
+///   rising edge of isBlowing and enforces a cooldown (blowCooldownSeconds) to prevent
+///   repeated triggers.
 /// </summary>
 public class DeviceInputManager : MonoBehaviour
 {
@@ -38,9 +37,8 @@ public class DeviceInputManager : MonoBehaviour
     public int baudRate = 115200;
 
     [Header("Blow Debounce  (Hardware Mode Only)")]
-    [Tooltip("Consecutive Unity frames the sensor must read 1 before a blow is confirmed")]
-    [SerializeField] private int blowConfirmFrames = 3;
-    [Tooltip("Seconds before another blow can be confirmed — prevents repeated triggers")]
+    [Tooltip("Seconds before another blow can be confirmed — prevents repeated triggers. " +
+             "Duration filtering is handled by the Arduino (BLOW_DURATION_MS).")]
     [SerializeField] private float blowCooldownSeconds = 2f;
 
     [Header("Debug")]
@@ -71,7 +69,7 @@ public class DeviceInputManager : MonoBehaviour
     private int _blowFramesLeft;
 
     // Hardware blow debounce state
-    private int   _blowConsecutiveCount;
+    private int   _prevStageBlowing;
     private float _blowCooldownTimer;
 
     // ── Unity lifecycle ──────────────────────────────────────────────
@@ -105,8 +103,11 @@ public class DeviceInputManager : MonoBehaviour
             PollKeyboard();
 
         // Unified blow output for both modes: emit a 2-frame pulse then go back to 0
+        int prevBlowing = isBlowing;
         isBlowing = _blowFramesLeft > 0 ? 1 : 0;
         if (_blowFramesLeft > 0) _blowFramesLeft--;
+        if (isBlowing == 1 && prevBlowing == 0)
+            Debug.Log("[DeviceInputManager] Blow triggered!");
     }
 
     // ── Keyboard fallback ────────────────────────────────────────────
@@ -131,27 +132,16 @@ public class DeviceInputManager : MonoBehaviour
         isTouching  = _stageTouching;
         isGrounding = _stageGrounding;
 
-        // Debounce: require blowConfirmFrames consecutive 1s before confirming.
-        // After confirmation, ignore the sensor for blowCooldownSeconds.
+        // Arduino already filters blow duration (BLOW_DURATION_MS).
+        // Unity just detects the rising edge and enforces a cooldown.
         _blowCooldownTimer = Mathf.Max(0f, _blowCooldownTimer - Time.deltaTime);
 
-        if (_stageBlowing == 1 && _blowCooldownTimer <= 0f)
+        if (_stageBlowing == 1 && _prevStageBlowing == 0 && _blowCooldownTimer <= 0f)
         {
-            _blowConsecutiveCount++;
-            if (_blowConsecutiveCount >= blowConfirmFrames)
-            {
-                _blowFramesLeft       = 2;   // emit pulse; Update() drives isBlowing
-                _blowConsecutiveCount = 0;
-                _blowCooldownTimer    = blowCooldownSeconds;
-                Debug.Log("[DeviceInputManager] Blow confirmed.");
-            }
+            _blowFramesLeft    = 2;
+            _blowCooldownTimer = blowCooldownSeconds;
         }
-        else
-        {
-            // Reset streak if sensor drops back to 0, or cooldown is still active
-            if (_stageBlowing == 0)
-                _blowConsecutiveCount = 0;
-        }
+        _prevStageBlowing = _stageBlowing;
     }
 
     // ── Serial port management ────────────────────────────────────────
@@ -244,7 +234,7 @@ public class DeviceInputManager : MonoBehaviour
         GUI.Label(new Rect(10f, 70f, 320f, 20f), $"isGrounding: {isGrounding}");
         GUI.Label(new Rect(10f, 90f, 320f, 20f), $"isBlowing:   {isBlowing}");
         if (useHardwareInput && _blowCooldownTimer > 0f)
-            GUI.Label(new Rect(10f, 110f, 320f, 20f), $"Blow cooldown: {_blowCooldownTimer:F1}s  (streak: {_blowConsecutiveCount}/{blowConfirmFrames})");
+            GUI.Label(new Rect(10f, 110f, 320f, 20f), $"Blow cooldown: {_blowCooldownTimer:F1}s");
     }
 
     private void OnDestroy() => StopSerial();
