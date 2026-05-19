@@ -20,6 +20,8 @@ public sealed class MirrorFractureController : MonoBehaviour
     [SerializeField] private Renderer mirrorRenderer;
     [SerializeField] private Renderer overlayRenderer;   // CrackOverlay Quad (optional)
     [SerializeField] private float transitionSpeed = 2.8f;
+    [SerializeField, Range(0f, 1f)] private float fractureShockIntensity = 0.85f;
+    [SerializeField, Range(0.05f, 1.5f)] private float fractureShockDuration = 0.42f;
 
     [SerializeField] private MirrorVisualState cleanState = new MirrorVisualState
     {
@@ -29,21 +31,21 @@ public sealed class MirrorFractureController : MonoBehaviour
     };
     [SerializeField] private MirrorVisualState state1 = new MirrorVisualState
     {
-        mirrorState = 1f, crackStrength = 0.42f, distortionStrength = 0.006f,
-        rippleStrength = 0.001f, blurStrength = 0.025f, chromaticStrength = 0f,
-        instability = 0f, darken = 0.14f, contrast = 1.02f
+        mirrorState = 1.3f, crackStrength = 0.09f, distortionStrength = 0.096f,
+        rippleStrength = 0.014f, blurStrength = 0.31f, chromaticStrength = 0.022f,
+        instability = 0.27f, darken = 0.31f, contrast = 1.03f
     };
     [SerializeField] private MirrorVisualState state2 = new MirrorVisualState
     {
-        mirrorState = 2f, crackStrength = 0.72f, distortionStrength = 0.018f,
-        rippleStrength = 0.002f, blurStrength = 0.11f, chromaticStrength = 0.0025f,
-        instability = 0.06f, darken = 0.36f, contrast = 1.04f
+        mirrorState = 2f, crackStrength = 0f, distortionStrength = 0.08f,
+        rippleStrength = 0f, blurStrength = 0.58f, chromaticStrength = 0.0025f,
+        instability = 0.06f, darken = 0.58f, contrast = 1.03f
     };
     [SerializeField] private MirrorVisualState state3 = new MirrorVisualState
     {
-        mirrorState = 3f, crackStrength = 0.78f, distortionStrength = 0.038f,
-        rippleStrength = 0.004f, blurStrength = 0.22f, chromaticStrength = 0.009f,
-        instability = 0.22f, darken = 0.68f, contrast = 1.12f
+        mirrorState = 3f, crackStrength = 0.18f, distortionStrength = 0.056f,
+        rippleStrength = 0.011f, blurStrength = 0.27f, chromaticStrength = 0.018f,
+        instability = 0.49f, darken = 0.76f, contrast = 1.1f
     };
 
     private static readonly int MirrorStateId        = Shader.PropertyToID("_MirrorState");
@@ -56,17 +58,24 @@ public sealed class MirrorFractureController : MonoBehaviour
     private static readonly int DarkenId             = Shader.PropertyToID("_Darken");
     private static readonly int ContrastId           = Shader.PropertyToID("_Contrast");
     private static readonly int CrackTexId           = Shader.PropertyToID("_CrackTex");
+    private static readonly int CrackTexLayer1Id     = Shader.PropertyToID("_CrackTexLayer1");
+    private static readonly int CrackTexLayer2Id     = Shader.PropertyToID("_CrackTexLayer2");
+    private static readonly int FractureShockId      = Shader.PropertyToID("_FractureShock");
 
     // Global properties consumed by CrackScreenDistortionFeature
     private static readonly int GlobalMirrorStateId   = Shader.PropertyToID("_GlobalMirrorState");
     private static readonly int GlobalCrackStrengthId = Shader.PropertyToID("_GlobalCrackStrength");
     private static readonly int GlobalDistortionId    = Shader.PropertyToID("_GlobalDistortionStrength");
     private static readonly int GlobalCrackTexId      = Shader.PropertyToID("_GlobalCrackTex");
+    private static readonly int GlobalCrackTexLayer1Id = Shader.PropertyToID("_GlobalCrackTexLayer1");
+    private static readonly int GlobalCrackTexLayer2Id = Shader.PropertyToID("_GlobalCrackTexLayer2");
+    private static readonly int GlobalFractureShockId = Shader.PropertyToID("_GlobalFractureShock");
 
     private Material runtimeMaterial;
     private Material overlayMaterial;
     private MirrorVisualState currentState;
     private MirrorVisualState targetState;
+    private float fractureShock;
 
     public int ActiveState { get; private set; }
 
@@ -81,6 +90,10 @@ public sealed class MirrorFractureController : MonoBehaviour
         // Publish crack texture globally so CrackScreenDistortionFeature can sample it
         Texture crackTex = runtimeMaterial != null ? runtimeMaterial.GetTexture(CrackTexId) : null;
         if (crackTex != null) Shader.SetGlobalTexture(GlobalCrackTexId, crackTex);
+        Texture layer1Tex = runtimeMaterial != null ? runtimeMaterial.GetTexture(CrackTexLayer1Id) : null;
+        if (layer1Tex != null) Shader.SetGlobalTexture(GlobalCrackTexLayer1Id, layer1Tex);
+        Texture layer2Tex = runtimeMaterial != null ? runtimeMaterial.GetTexture(CrackTexLayer2Id) : null;
+        if (layer2Tex != null) Shader.SetGlobalTexture(GlobalCrackTexLayer2Id, layer2Tex);
         currentState    = cleanState;
         targetState     = cleanState;
         ApplyState(currentState);
@@ -90,6 +103,7 @@ public sealed class MirrorFractureController : MonoBehaviour
     {
         float step   = 1f - Mathf.Exp(-transitionSpeed * Time.deltaTime);
         currentState = LerpState(currentState, targetState, step);
+        fractureShock = Mathf.MoveTowards(fractureShock, 0f, Time.deltaTime / Mathf.Max(fractureShockDuration, 0.01f));
         ApplyState(currentState);
     }
 
@@ -109,6 +123,7 @@ public sealed class MirrorFractureController : MonoBehaviour
 
     public void SetFractureState(int stateIndex)
     {
+        int previousState = ActiveState;
         ActiveState = Mathf.Clamp(stateIndex, 0, 3);
         targetState = ActiveState switch
         {
@@ -117,6 +132,12 @@ public sealed class MirrorFractureController : MonoBehaviour
             3 => state3,
             _ => cleanState
         };
+
+        if (ActiveState > previousState)
+        {
+            float stateBoost = Mathf.InverseLerp(1f, 3f, ActiveState);
+            fractureShock = Mathf.Max(fractureShock, fractureShockIntensity * Mathf.Lerp(0.45f, 1f, stateBoost));
+        }
     }
 
     public void ResetMirror()
@@ -124,6 +145,7 @@ public sealed class MirrorFractureController : MonoBehaviour
         ActiveState   = 0;
         targetState   = cleanState;
         currentState  = cleanState;
+        fractureShock = 0f;
         ApplyState(currentState);
     }
 
@@ -156,6 +178,7 @@ public sealed class MirrorFractureController : MonoBehaviour
             runtimeMaterial.SetFloat(InstabilityId,        state.instability);
             runtimeMaterial.SetFloat(DarkenId,             state.darken);
             runtimeMaterial.SetFloat(ContrastId,           state.contrast);
+            runtimeMaterial.SetFloat(FractureShockId,      fractureShock);
         }
 
         if (overlayMaterial != null)
@@ -164,11 +187,13 @@ public sealed class MirrorFractureController : MonoBehaviour
             overlayMaterial.SetFloat(CrackStrengthId, state.crackStrength);
             overlayMaterial.SetFloat(InstabilityId,   state.instability);
             overlayMaterial.SetFloat(DarkenId,        state.darken);
+            overlayMaterial.SetFloat(FractureShockId, fractureShock);
         }
 
         // Push to global scope for the CrackScreenDistortionFeature blit pass
         Shader.SetGlobalFloat(GlobalMirrorStateId,   state.mirrorState);
         Shader.SetGlobalFloat(GlobalCrackStrengthId, state.crackStrength);
         Shader.SetGlobalFloat(GlobalDistortionId,    state.distortionStrength);
+        Shader.SetGlobalFloat(GlobalFractureShockId, fractureShock);
     }
 }

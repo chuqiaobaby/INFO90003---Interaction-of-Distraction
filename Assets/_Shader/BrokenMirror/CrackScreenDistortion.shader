@@ -24,20 +24,27 @@ Shader "Hidden/CrackScreenDistortion"
 
             TEXTURE2D(_GlobalCrackTex);
             SAMPLER(sampler_GlobalCrackTex);
+            TEXTURE2D(_GlobalCrackTexLayer1);
+            SAMPLER(sampler_GlobalCrackTexLayer1);
+            TEXTURE2D(_GlobalCrackTexLayer2);
+            SAMPLER(sampler_GlobalCrackTexLayer2);
             float _GlobalMirrorState;
             float _GlobalCrackStrength;
             float _GlobalDistortionStrength;
+            float _GlobalFractureShock;
 
             float CrackMask(float2 uv)
             {
+                float l1 = SAMPLE_TEXTURE2D(_GlobalCrackTexLayer1, sampler_GlobalCrackTexLayer1, uv).r;
+                float l2 = SAMPLE_TEXTURE2D(_GlobalCrackTexLayer2, sampler_GlobalCrackTexLayer2, uv).r;
                 float p = SAMPLE_TEXTURE2D(_GlobalCrackTex, sampler_GlobalCrackTex, uv).r;
                 float s = SAMPLE_TEXTURE2D(_GlobalCrackTex, sampler_GlobalCrackTex,
                               uv * 1.73 + float2(0.17, 0.31)).r;
                 float t = SAMPLE_TEXTURE2D(_GlobalCrackTex, sampler_GlobalCrackTex,
                               uv * 2.61 + float2(0.61, 0.09)).r;
-                return saturate(p
-                              + s * saturate(_GlobalMirrorState - 0.7)  * 0.55
-                              + t * saturate(_GlobalMirrorState - 1.8)  * 0.45);
+                float cinematic = saturate(p + s * 0.55 + t * 0.45);
+                float stage12 = saturate(l1 * saturate(_GlobalMirrorState) + l2 * saturate(_GlobalMirrorState - 1.0));
+                return lerp(stage12, cinematic, saturate(_GlobalMirrorState - 2.0));
             }
 
             float2 CrackGradient(float2 uv)
@@ -58,6 +65,7 @@ Shader "Hidden/CrackScreenDistortion"
                 float distAmt = (state2 * 0.55 + state3 * 1.3)
                               * _GlobalDistortionStrength
                               * _GlobalCrackStrength;
+                distAmt += _GlobalFractureShock * _GlobalCrackStrength * saturate(_GlobalMirrorState / 3.0) * 0.012;
 
                 if (distAmt < 0.0005)
                     return SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, uv);

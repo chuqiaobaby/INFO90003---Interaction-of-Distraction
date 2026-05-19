@@ -851,7 +851,7 @@ MonoBehaviour:
     darken: 0
     contrast: 1
   state1:
-    mirrorState: 1.3
+    mirrorState: 1
     crackStrength: 0.09
     distortionStrength: 0.096
     rippleStrength: 0.014
@@ -859,7 +859,7 @@ MonoBehaviour:
     chromaticStrength: 0.022
     instability: 0.27
     darken: 0.31
-    contrast: 1.03
+    contrast: 0.96
   state2:
     mirrorState: 2
     crackStrength: 0
@@ -868,8 +868,8 @@ MonoBehaviour:
     blurStrength: 0.58
     chromaticStrength: 0.0025
     instability: 0.06
-    darken: 0.58
-    contrast: 1.03
+    darken: 0.465
+    contrast: 1.04
   state3:
     mirrorState: 3
     crackStrength: 0.18
@@ -878,7 +878,7 @@ MonoBehaviour:
     blurStrength: 0.27
     chromaticStrength: 0.018
     instability: 0.49
-    darken: 0.76
+    darken: 0.596
     contrast: 1.1
 --- !u!64 &876773102
 MeshCollider:
@@ -969,7 +969,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 141.01016, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.67311, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1234,7 +1234,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 141.01016, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.67311, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
