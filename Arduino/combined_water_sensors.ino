@@ -12,33 +12,58 @@
  */
 
 // Uncomment to see sound sensor values for calibration
-// #define DEBUG_SOUND
+//#define DEBUG_SOUND
+
+#include <FastLED.h>
+
+#define LED_PIN         12
+#define NUM_LEDS        150
+#define BRIGHTNESS      100
+
+#define TOUCH_PIN       4
+#define TOUCH_THRESHOLD 400
+
+CRGB leds[NUM_LEDS];
+
+unsigned long lastLedUpdate = 0;
+unsigned long lastSerialUpdate = 0;
+const unsigned long LED_UPDATE_INTERVAL = 20;    // Update LEDs every 20ms
+const unsigned long SERIAL_UPDATE_INTERVAL = 200; // Send data every 200ms
 
 // ====== WATER LEVEL SENSORS ======
 const int sensorLow  = 14;
-const int sensorMid  = 27;
-const int sensorHigh = 26;
+const int sensorMid  = 32;
+const int sensorHigh = 15;
+
+const int threshold = 4050;
+
+int isTriggered(int pin){
+  int value = analogRead(pin);
+  return (value < threshold);  // true if water detected
+}
 
 // ====== CAPACITIVE TOUCH SENSOR ======
-const int touchPin = 4;
-const int ledPin = 12;
-const int TOUCH_THRESHOLD = 500;  // Calibrate as needed
+
+// Rainbow cycling
+uint8_t hue = 0;
+
+// Pulse brightness
+uint8_t pulseBrightness = 0;
+int pulseDirection = 1;
 
 // ====== GROUNDING SENSORS (LDRs) ======
 const int ldrLeft  = 34;
-const int ldrRight = 35;
-const int DARK_THRESHOLD = 1500;  // Calibrate as needed
+const int ldrRight = 39;
+const int DARK_THRESHOLD = 160;  // Calibrate as needed
 
-// ====== SOUND SENSORS (BLOWING) ======
-// NOTE: Requires sound sensor modules with ANALOG output (AO pin)
-// Common modules: KY-037, LM393-based sensors
-// Connect AO pins to ESP32 analog-capable GPIOs (32, 33, 34, 35, etc.)
-const int sound1 = 32;  // Analog pin for sound sensor 1
-const int sound2 = 33;  // Analog pin for sound sensor 2
-const int SOUND_THRESHOLD = 2500;  // Analog threshold (0-4095 on ESP32)
-                                    // Higher = less sensitive, adjust based on room noise
-const int BLOW_DURATION_MS = 150;   // Minimum duration to count as intentional blow
-const bool REQUIRE_BOTH_SENSORS = false;  // Set true to require both sensors (more reliable)
+// ====== SOUND SENSOR (BLOWING) ======
+// Using DIGITAL output (DO pin)
+// Sensor outputs:
+// HIGH (1) = idle / no blow
+// LOW  (0) = sound detected
+const int soundPin = 33;
+
+const int BLOW_DURATION_MS = 150;
 
 // Blow detection timing
 unsigned long blowStartTime = 0;
@@ -47,17 +72,15 @@ bool blowDetected = false;
 void setup() {
   Serial.begin(115200);
   
-  // Water level sensors
-  pinMode(sensorLow, INPUT);
-  pinMode(sensorMid, INPUT);
-  pinMode(sensorHigh, INPUT);
-  
-  // Touch LED indicator
-  pinMode(ledPin, OUTPUT);
+  //Touch sensor 
+  FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.setBrightness(BRIGHTNESS);
+
+    FastLED.clear();
+    FastLED.show();
   
   // Sound sensors
-  pinMode(sound1, INPUT);
-  pinMode(sound2, INPUT);
+  pinMode(soundPin, INPUT);
   
   // LDR sensors are analog inputs (no pinMode needed)
 }
@@ -65,9 +88,9 @@ void setup() {
 void loop() {
   // ====== READ WATER LEVEL (0-3) ======
   // Sensors use inverted logic (NPN pulls LOW when active)
-  bool low  = !digitalRead(sensorLow);
-  bool mid  = !digitalRead(sensorMid);
-  bool high = !digitalRead(sensorHigh);
+  bool low  = isTriggered(sensorLow);
+  bool mid  = isTriggered(sensorMid);
+  bool high = isTriggered(sensorHigh);
   
   int waterLevel;
   if (high)      waterLevel = 3;
@@ -76,62 +99,96 @@ void loop() {
   else           waterLevel = 0;
   
   // ====== READ TOUCH SENSOR (0 or 1) ======
-  int touchValue = touchRead(touchPin);
+  int touchValue = touchRead(TOUCH_PIN);
   int isTouching = (touchValue < TOUCH_THRESHOLD) ? 1 : 0;
-  
-  // Update LED indicator
-  digitalWrite(ledPin, isTouching ? HIGH : LOW);
-  
-  // ====== READ GROUNDING SENSORS (0 or 1) ======
+
+    // ====== READ GROUNDING SENSORS (0 or 1) ======
   int leftValue  = analogRead(ldrLeft);
   int rightValue = analogRead(ldrRight);
   bool isGrounding = (leftValue < DARK_THRESHOLD) && (rightValue < DARK_THRESHOLD) ? 1 : 0;
   
-  // ====== READ SOUND SENSORS (0 or 1) ======
-  // Read analog values (0-4095 on ESP32)
-  int sound1Value = analogRead(sound1);
-  int sound2Value = analogRead(sound2);
-  
-  // Check if sound exceeds threshold
-  bool s1Active = sound1Value > SOUND_THRESHOLD;
-  bool s2Active = sound2Value > SOUND_THRESHOLD;
-  
-  // Determine if sound is currently detected
-  bool soundNow;
-  if (REQUIRE_BOTH_SENSORS) {
-    soundNow = s1Active && s2Active;  // Both sensors must detect
-  } else {
-    soundNow = s1Active || s2Active;  // Either sensor can detect
+// ====== READ SOUND SENSOR (0 or 1) ======
+// Sensor logic:
+// LOW  (0) = idle / no blow
+// HIGH (1) = blowing detected
+bool soundDetected = digitalRead(soundPin) == HIGH;
+
+// Duration filtering: require sustained sound
+unsigned long currentTime = millis();
+
+if (soundDetected) {
+  if (blowStartTime == 0) {
+    blowStartTime = currentTime;
+  } 
+  else if ((currentTime - blowStartTime) >= BLOW_DURATION_MS) {
+    blowDetected = true;
   }
+} else {
+  blowStartTime = 0;
+  blowDetected = false;
+}
+
+// Final Unity output
+int isBlowing = soundDetected ? 1 : 0;
   
-  // Duration filtering: require sustained sound
-  unsigned long currentTime = millis();
-  
-  if (soundNow) {
-    if (blowStartTime == 0) {
-      blowStartTime = currentTime;  // Start timing
-    } else if ((currentTime - blowStartTime) >= BLOW_DURATION_MS) {
-      blowDetected = true;  // Sound sustained long enough
+  if (currentTime - lastLedUpdate >= LED_UPDATE_INTERVAL) {
+  lastLedUpdate = currentTime;
+
+  if(isTouching){
+     // Create rainbow
+        fill_rainbow(leds, NUM_LEDS, hue, 5);
+
+        // Apply pulsing brightness
+        FastLED.setBrightness(pulseBrightness);
+
+        FastLED.show();
+
+        // Cycle rainbow colours
+        hue++;
+
+        // Update pulse brightness
+        pulseBrightness += pulseDirection * 2;
+
+        // Reverse pulse direction at limits
+        if (pulseBrightness >= BRIGHTNESS || pulseBrightness <= 10) {
+            pulseDirection *= -1;
+        }
+  } else {
+            // LEDs OFF
+        FastLED.clear();
+        FastLED.show();
+
+        // Reset pulse when inactive
+        pulseBrightness = 10;
+        pulseDirection = 1;
     }
-  } else {
-    // Sound stopped, reset
-    blowStartTime = 0;
-    blowDetected = false;
   }
   
-  int isBlowing = blowDetected ? 1 : 0;
-  
-  #ifdef DEBUG_SOUND
-  // Debug output for calibration (comment out for production)
-  Serial.print("Sound1: ");
-  Serial.print(sound1Value);
-  Serial.print(" | Sound2: ");
-  Serial.print(sound2Value);
-  Serial.print(" | Threshold: ");
-  Serial.print(SOUND_THRESHOLD);
-  Serial.print(" | Blowing: ");
-  Serial.println(isBlowing);
-  #endif
+  if (currentTime - lastSerialUpdate >= SERIAL_UPDATE_INTERVAL) {
+    lastSerialUpdate = currentTime;
+
+/*#ifdef DEBUG_SOUND
+Serial.print("Sound: ");
+Serial.print(digitalRead(soundPin));
+Serial.print(" | Blowing: ");
+Serial.println(isBlowing);
+#endif*/
+
+  /*int high = analogRead(sensorHigh);
+  Serial.print("Water High:");
+  Serial.print(high);
+  int mid = analogRead(sensorMid);
+  Serial.print(" Water Mid:");
+  Serial.print(mid);
+  int low = analogRead(sensorLow);
+  Serial.print(" Water Low:");
+  Serial.println(low);*/
+
+  /*Serial.print("Left LDR:");
+  Serial.print(leftValue);
+  Serial.print(" Right LDR:");
+  Serial.println(rightValue);*/
+
   
   // ====== SEND DATA TO UNITY ======
   // Format: [WaterLevel],[IsTouching],[IsGrounding],[IsBlowing]
@@ -143,5 +200,6 @@ void loop() {
   Serial.print(",");
   Serial.println(isBlowing);
   
-  delay(200);  // Sampling rate - adjust as needed
+  delay(1);  // Sampling rate - adjust as needed
+}
 }

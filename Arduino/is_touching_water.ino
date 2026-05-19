@@ -1,23 +1,75 @@
-int touchPin = 4; // A5 pin on ESP32
-int ledPin = 12; //12 pin on ESP32
+#include <FastLED.h>
+
+#define LED_PIN         12
+#define NUM_LEDS        150
+#define BRIGHTNESS      80
+
+#define TOUCH_PIN       4
+#define TOUCH_THRESHOLD 800
+
+CRGB leds[NUM_LEDS];
+
+// Rainbow cycling
+uint8_t hue = 0;
+
+// Pulse brightness
+uint8_t pulseBrightness = 0;
+int pulseDirection = 1;
 
 void setup() {
-  pinMode(ledPin, OUTPUT);
-  Serial.begin(115200); //Baud rate - make sure to set the same baud rate in Arduino or else values will be undefined.;
+
+    Serial.begin(115200);
+
+    FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.setBrightness(BRIGHTNESS);
+
+    FastLED.clear();
+    FastLED.show();
 }
 
 void loop() {
-  int touchValue = touchRead(touchPin);
 
-  if (touchValue < 500) { //  capacitance threshold (can be calibrated)
-    digitalWrite(ledPin, HIGH);
-    //Serial.println(touchValue);
-    Serial.println("1");
-  } else {
-    digitalWrite(ledPin, LOW);
-    //Serial.println(touchValue);
-    Serial.println("0");
-  }
+    int touchValue = touchRead(TOUCH_PIN);
+    Serial.println(touchValue);
 
-  delay(200);
+    // Hand detected in water
+    if (touchValue < TOUCH_THRESHOLD) {
+
+        // Create rainbow
+        fill_rainbow(leds, NUM_LEDS, hue, 5);
+
+        // Apply pulsing brightness
+        FastLED.setBrightness(pulseBrightness);
+
+        FastLED.show();
+
+        // Cycle rainbow colours
+        hue++;
+
+        // Update pulse brightness
+        pulseBrightness += pulseDirection * 2;
+
+        // Reverse pulse direction at limits
+        if (pulseBrightness >= BRIGHTNESS || pulseBrightness <= 10) {
+            pulseDirection *= -1;
+        }
+
+        Serial.println(1);
+
+        delay(20);
+
+    } else {
+
+        // LEDs OFF
+        FastLED.clear();
+        FastLED.show();
+
+        // Reset pulse when inactive
+        pulseBrightness = 10;
+        pulseDirection = 1;
+
+        Serial.println(0);
+
+        delay(50);
+    }
 }

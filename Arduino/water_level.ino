@@ -1,37 +1,47 @@
-// Pin definitions (choose any safe GPIOs)
-const int sensorLow  = 14;
-const int sensorMid  = 27;
-const int sensorHigh = 26;
+#define TOP_SENSOR 15
+#define MID_SENSOR 32
+#define BOT_SENSOR 14
 
-int level = -1;        // track last sent value
+const int THRESHOLD = 4050;  // adjust based on your readings
 
 void setup() {
-  Serial.begin(115200);
+    Serial.begin(115200);
+}
 
-  pinMode(sensorLow, INPUT);
-  pinMode(sensorMid, INPUT);
-  pinMode(sensorHigh, INPUT);
+int isTriggered(int pin) {
+    int value = analogRead(pin);
+    return (value < THRESHOLD);  // true if water detected
 }
 
 void loop() {
 
-  // Read sensors (invert because NPN pulls LOW when active)
-  bool low  = !digitalRead(sensorLow);
-  bool mid  = !digitalRead(sensorMid);
-  bool high = !digitalRead(sensorHigh);
+    bool top = isTriggered(TOP_SENSOR);
+    bool mid = isTriggered(MID_SENSOR);
+    bool bot = isTriggered(BOT_SENSOR);
 
-  int newLevel;
+    int level = 0;
 
-  if (high)      newLevel = 3;
-  else if (mid)  newLevel = 2;
-  else if (low)  newLevel = 1;
-  else           newLevel = 0;
+    if (top) {
+        level = 3;
+    }
+    else if (mid) {
+        level = 2;
+    }
+    else if (bot) {
+        level = 1;
+    }
+    else {
+        level = 0;
+    }
 
-  // Only send when it changes (prevents spam in Unity)
-  if (newLevel != level) {
-    level = newLevel;
+    Serial.print("Top: ");
+    Serial.print(top);
+    Serial.print(" Mid: ");
+    Serial.print(mid);
+    Serial.print(" Bot: ");
+    Serial.print(bot);
+    Serial.print(" => Level: ");
     Serial.println(level);
-  }
 
-  delay(200); // small stability delay
+    delay(200);
 }

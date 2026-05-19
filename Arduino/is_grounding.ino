@@ -1,18 +1,18 @@
 const int ldrLeft  = 34;
-const int ldrRight = 35;
+const int ldrRight = 39;
 
 // Darkness threshold - can be changed
-const int DARK_THRESHOLD = 1500;
+const int DARK_THRESHOLD = 5;
 
 void setup() {
-  Serial.begin(115200) //Baud rate;
+  Serial.begin(115200); //Baud rate;
 }
 
 void loop() {
 
   int leftValue  = analogRead(ldrLeft);
   int rightValue = analogRead(ldrRight);
-
+  
   // Check if both sensors are covered
   bool bothCovered = (leftValue < DARK_THRESHOLD) && (rightValue < DARK_THRESHOLD);
 
@@ -24,3 +24,4 @@ void loop() {
   }
 
   delay(200);
+}

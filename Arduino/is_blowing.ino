@@ -1,6 +1,6 @@
 // GPIO pins for sound sensors
 const int sound1 = 32;
-const int sound2 = 33;
+const int sound2 = 15;
 
 void setup() {
   Serial.begin(115200);
