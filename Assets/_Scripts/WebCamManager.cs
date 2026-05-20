@@ -6,6 +6,10 @@ public class WebCamManager : MonoBehaviour
     [Header("把 BrokenMirror Quad 拖到这里（替换原来的 WebCamBackground）")]
     public MeshRenderer backgroundQuad;
 
+    [Header("Display 1 Camera")]
+    [SerializeField] private string preferredCameraNameContains = "MacBook";
+    [SerializeField] private int fallbackCameraDeviceIndex = 0;
+
     private WebCamTexture webcamTexture;
     private int lastScreenW = -1;
     private int lastScreenH = -1;
@@ -16,11 +20,12 @@ public class WebCamManager : MonoBehaviour
 
         if (devices.Length > 0)
         {
-            webcamTexture = new WebCamTexture(devices[0].name);
+            int selectedIndex = SelectCameraIndex(devices);
+            webcamTexture = new WebCamTexture(devices[selectedIndex].name);
             backgroundQuad.material.SetTexture("_WebcamTex", webcamTexture);
             backgroundQuad.material.SetFloat("_FlipX", 0f);
             webcamTexture.Play();
-            Debug.Log("[WebCamManager] Camera connected: " + devices[0].name);
+            Debug.Log("[WebCamManager] Camera connected: " + devices[selectedIndex].name);
 
             yield return null; // wait one frame for videoVerticallyMirrored and real resolution
             float flipY = webcamTexture.videoVerticallyMirrored ? 1f : 0f;
@@ -33,6 +38,23 @@ public class WebCamManager : MonoBehaviour
         {
             Debug.LogError("[WebCamManager] No camera found!");
         }
+    }
+
+    private int SelectCameraIndex(WebCamDevice[] devices)
+    {
+        if (!string.IsNullOrWhiteSpace(preferredCameraNameContains))
+        {
+            for (int i = 0; i < devices.Length; i++)
+            {
+                if (devices[i].name.IndexOf(preferredCameraNameContains, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return i;
+            }
+        }
+
+        if (fallbackCameraDeviceIndex >= 0 && fallbackCameraDeviceIndex < devices.Length)
+            return fallbackCameraDeviceIndex;
+
+        return 0;
     }
 
     void Update()

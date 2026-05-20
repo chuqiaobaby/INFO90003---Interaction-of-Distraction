@@ -5,13 +5,26 @@ using UnityEngine;
 [RequireComponent(typeof(MeshRenderer))]
 public sealed class PastelClassicRippleController : MonoBehaviour
 {
+    private const int MaxInteractiveHands = 4;
+    private const int MaxTrailSamples = 16;
+    private const float TrailSampleInterval = 0.025f;
+    private const float TrailSampleMinDistance = 0.004f;
+
     public Camera targetCamera;
     public KeyCode triggerKey = KeyCode.Space;
     public Color backgroundColor = new Color(0f, 0f, 0f, 0f);
-    [Range(0f, 2f)] public float strokeOpacity = 0.96f;
-    [Range(0.2f, 4f)] public float duration = 2.2f;
-    [Range(0.1f, 1.5f)] public float maxRadius = 0.86f;
-    [Range(0f, 1f)] public float grainStrength = 0.045f;
+    [Range(0f, 3f)] public float strokeOpacity = 2.2f;
+    [Range(0.2f, 5f)] public float duration = 2.8f;
+    [Range(0.1f, 2.2f)] public float maxRadius = 1.25f;
+    [Range(0f, 1f)] public float grainStrength = 0.18f;
+    [Header("Cinematic Particle Field")]
+    [Range(0f, 4f)] public float flowSpeed = 0.72f;
+    [Range(0.2f, 4f)] public float trailLength = 3.0f;
+    [Range(0f, 12f)] public float bloomBoost = 8.5f;
+    [Range(0f, 4f)] public float handInfluence = 2.25f;
+    [Range(0.4f, 3f)] public float particleDensity = 1.95f;
+    [Range(0.25f, 1.5f)] public float interactionRadius = 0.62f;
+    [Range(0f, 4f)] public float continuousTrailStrength = 2.6f;
     public float seed = 90003f;
     public float cameraHeight = 5f;
     public float projectionHeight = 0f;
@@ -24,10 +37,75 @@ public sealed class PastelClassicRippleController : MonoBehaviour
     private static readonly int RippleCenterId = Shader.PropertyToID("_RippleCenter");
     private static readonly int SeedId = Shader.PropertyToID("_Seed");
     private static readonly int GrainStrengthId = Shader.PropertyToID("_GrainStrength");
+    private static readonly int FlowSpeedId = Shader.PropertyToID("_FlowSpeed");
+    private static readonly int TrailLengthId = Shader.PropertyToID("_TrailLength");
+    private static readonly int BloomBoostId = Shader.PropertyToID("_BloomBoost");
+    private static readonly int HandInfluenceId = Shader.PropertyToID("_HandInfluence");
+    private static readonly int ParticleDensityId = Shader.PropertyToID("_ParticleDensity");
+    private static readonly int InteractionRadiusId = Shader.PropertyToID("_InteractionRadius");
+    private static readonly int ContinuousTrailStrengthId = Shader.PropertyToID("_ContinuousTrailStrength");
+
+    private static readonly int[] HandIds =
+    {
+        Shader.PropertyToID("_Hand0"),
+        Shader.PropertyToID("_Hand1"),
+        Shader.PropertyToID("_Hand2"),
+        Shader.PropertyToID("_Hand3")
+    };
+
+    private static readonly int[] VelocityIds =
+    {
+        Shader.PropertyToID("_Velocity0"),
+        Shader.PropertyToID("_Velocity1"),
+        Shader.PropertyToID("_Velocity2"),
+        Shader.PropertyToID("_Velocity3")
+    };
+
+    private static readonly int[] BurstIds =
+    {
+        Shader.PropertyToID("_Burst0"),
+        Shader.PropertyToID("_Burst1"),
+        Shader.PropertyToID("_Burst2"),
+        Shader.PropertyToID("_Burst3")
+    };
+
+    private static readonly int[] TrailIds =
+    {
+        Shader.PropertyToID("_Trail0"),
+        Shader.PropertyToID("_Trail1"),
+        Shader.PropertyToID("_Trail2"),
+        Shader.PropertyToID("_Trail3"),
+        Shader.PropertyToID("_Trail4"),
+        Shader.PropertyToID("_Trail5"),
+        Shader.PropertyToID("_Trail6"),
+        Shader.PropertyToID("_Trail7"),
+        Shader.PropertyToID("_Trail8"),
+        Shader.PropertyToID("_Trail9"),
+        Shader.PropertyToID("_Trail10"),
+        Shader.PropertyToID("_Trail11"),
+        Shader.PropertyToID("_Trail12"),
+        Shader.PropertyToID("_Trail13"),
+        Shader.PropertyToID("_Trail14"),
+        Shader.PropertyToID("_Trail15")
+    };
 
     private MeshRenderer meshRenderer;
     private MeshFilter meshFilter;
     private Material materialInstance;
+    private readonly Vector2[] handPositions = new Vector2[MaxInteractiveHands];
+    private readonly Vector2[] previousHandPositions = new Vector2[MaxInteractiveHands];
+    private readonly Vector2[] handVelocities = new Vector2[MaxInteractiveHands];
+    private readonly bool[] handWasActive = new bool[MaxInteractiveHands];
+    private readonly float[] burstTimes = new float[MaxInteractiveHands];
+    private readonly bool[] burstIsActive = new bool[MaxInteractiveHands];
+    private readonly Vector2[] trailPositions = new Vector2[MaxTrailSamples];
+    private readonly float[] trailTimes = new float[MaxTrailSamples];
+    private readonly float[] trailStrengths = new float[MaxTrailSamples];
+    private readonly Vector2[] lastTrailSamplePositions = new Vector2[MaxInteractiveHands];
+    private readonly float[] lastTrailSampleTimes = new float[MaxInteractiveHands];
+    private int activeHandCount;
+    private int nextBurstSlot;
+    private int nextTrailSlot;
 
     private void OnEnable()
     {
@@ -72,6 +150,54 @@ public sealed class PastelClassicRippleController : MonoBehaviour
             Mathf.Clamp01(normalizedPosition.y));
         materialInstance.SetVector(RippleCenterId, clampedPosition);
         materialInstance.SetFloat(TriggerTimeId, Application.isPlaying ? Time.time : Time.realtimeSinceStartup);
+        SetBurst(nextBurstSlot, clampedPosition, Application.isPlaying ? Time.time : Time.realtimeSinceStartup, true);
+        nextBurstSlot = (nextBurstSlot + 1) % MaxInteractiveHands;
+    }
+
+    public void SetInteractionHands(Vector2[] normalizedPositions, int count)
+    {
+        EnsureSetup();
+
+        int clampedCount = Mathf.Clamp(count, 0, MaxInteractiveHands);
+        float deltaTime = Mathf.Max(Time.deltaTime, 0.001f);
+        activeHandCount = clampedCount;
+
+        for (int i = 0; i < MaxInteractiveHands; i++)
+        {
+            bool active = i < clampedCount && normalizedPositions != null;
+            Vector2 position = active
+                ? new Vector2(Mathf.Clamp01(normalizedPositions[i].x), Mathf.Clamp01(normalizedPositions[i].y))
+                : handPositions[i];
+
+            if (active)
+            {
+                if (!handWasActive[i])
+                {
+                    previousHandPositions[i] = position;
+                    handVelocities[i] = Vector2.zero;
+                    SetBurst(i, position, Application.isPlaying ? Time.time : Time.realtimeSinceStartup, true);
+                    AddTrailSample(i, position, 1f);
+                }
+                else
+                {
+                    Vector2 targetVelocity = (position - previousHandPositions[i]) / deltaTime;
+                    handVelocities[i] = Vector2.Lerp(handVelocities[i], targetVelocity, 0.35f);
+                    float velocityStrength = Mathf.Clamp01(handVelocities[i].magnitude * 1.7f);
+                    AddTrailSample(i, position, Mathf.Lerp(0.35f, 1f, velocityStrength));
+                }
+
+                handPositions[i] = position;
+                previousHandPositions[i] = position;
+            }
+            else
+            {
+                handVelocities[i] = Vector2.Lerp(handVelocities[i], Vector2.zero, 0.12f);
+            }
+
+            handWasActive[i] = active;
+        }
+
+        ApplyInteractionProperties();
     }
 
     private void EnsureSetup()
@@ -86,17 +212,37 @@ public sealed class PastelClassicRippleController : MonoBehaviour
 
         if (materialInstance == null)
         {
-            Shader shader = Shader.Find("INFO90003/Pastel Classic Ripple HLSL");
+            Shader shader = Shader.Find("INFO90003/Display 2 Cinematic Particle Field HLSL");
+            if (shader == null)
+            {
+                shader = Shader.Find("INFO90003/Pastel Classic Ripple HLSL");
+            }
+
             materialInstance = new Material(shader)
             {
-                name = "Pastel Classic Ripple HLSL Material"
+                name = "Display 2 Cinematic Particle Field Material"
             };
             materialInstance.SetFloat(TriggerTimeId, -1000f);
             materialInstance.SetVector(RippleCenterId, new Vector2(0.5f, 0.5f));
+            for (int i = 0; i < MaxInteractiveHands; i++)
+            {
+                handPositions[i] = new Vector2(0.5f, 0.5f);
+                previousHandPositions[i] = handPositions[i];
+                burstTimes[i] = -1000f;
+                lastTrailSampleTimes[i] = -1000f;
+            }
+
+            for (int i = 0; i < MaxTrailSamples; i++)
+            {
+                trailPositions[i] = new Vector2(0.5f, 0.5f);
+                trailTimes[i] = -1000f;
+                trailStrengths[i] = 0f;
+            }
         }
 
         meshRenderer.sharedMaterial = materialInstance;
         ConfigureCameraAndPlane();
+        ApplyInteractionProperties();
     }
 
     private void ConfigureCameraAndPlane()
@@ -133,6 +279,65 @@ public sealed class PastelClassicRippleController : MonoBehaviour
         materialInstance.SetFloat(MaxRadiusId, maxRadius);
         materialInstance.SetFloat(SeedId, seed);
         materialInstance.SetFloat(GrainStrengthId, grainStrength);
+        materialInstance.SetFloat(FlowSpeedId, flowSpeed);
+        materialInstance.SetFloat(TrailLengthId, trailLength);
+        materialInstance.SetFloat(BloomBoostId, bloomBoost);
+        materialInstance.SetFloat(HandInfluenceId, handInfluence);
+        materialInstance.SetFloat(ParticleDensityId, particleDensity);
+        materialInstance.SetFloat(InteractionRadiusId, interactionRadius);
+        materialInstance.SetFloat(ContinuousTrailStrengthId, continuousTrailStrength);
+        ApplyInteractionProperties();
+    }
+
+    private void ApplyInteractionProperties()
+    {
+        if (materialInstance == null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < MaxInteractiveHands; i++)
+        {
+            float active = i < activeHandCount && handWasActive[i] ? 1f : 0f;
+            materialInstance.SetVector(HandIds[i], new Vector4(handPositions[i].x, handPositions[i].y, active, 0f));
+            materialInstance.SetVector(VelocityIds[i], new Vector4(handVelocities[i].x, handVelocities[i].y, 0f, 0f));
+            materialInstance.SetVector(BurstIds[i], new Vector4(handPositions[i].x, handPositions[i].y, burstTimes[i], burstIsActive[i] ? 1f : 0f));
+        }
+
+        for (int i = 0; i < MaxTrailSamples; i++)
+        {
+            materialInstance.SetVector(TrailIds[i], new Vector4(trailPositions[i].x, trailPositions[i].y, trailTimes[i], trailStrengths[i]));
+        }
+    }
+
+    private void SetBurst(int slot, Vector2 position, float time, bool active)
+    {
+        int safeSlot = Mathf.Clamp(slot, 0, MaxInteractiveHands - 1);
+        handPositions[safeSlot] = position;
+        burstTimes[safeSlot] = time;
+        burstIsActive[safeSlot] = active;
+        materialInstance.SetVector(BurstIds[safeSlot], new Vector4(position.x, position.y, time, active ? 1f : 0f));
+    }
+
+    private void AddTrailSample(int handIndex, Vector2 position, float strength)
+    {
+        int safeHand = Mathf.Clamp(handIndex, 0, MaxInteractiveHands - 1);
+        float now = Application.isPlaying ? Time.time : Time.realtimeSinceStartup;
+        float elapsed = now - lastTrailSampleTimes[safeHand];
+        float distance = Vector2.Distance(position, lastTrailSamplePositions[safeHand]);
+
+        if (elapsed < TrailSampleInterval && distance < TrailSampleMinDistance)
+        {
+            return;
+        }
+
+        lastTrailSampleTimes[safeHand] = now;
+        lastTrailSamplePositions[safeHand] = position;
+
+        trailPositions[nextTrailSlot] = position;
+        trailTimes[nextTrailSlot] = now;
+        trailStrengths[nextTrailSlot] = Mathf.Clamp01(strength);
+        nextTrailSlot = (nextTrailSlot + 1) % MaxTrailSamples;
     }
 
     private static Mesh CreateQuadMesh()

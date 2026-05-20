@@ -25,25 +25,34 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
     [Header("Hand Position")]
     [Tooltip("MediaPipe hand landmark index. 8 = index fingertip, 9 = palm/middle base area.")]
     [SerializeField, Range(0, 20)] private int landmarkIndex = 8;
-    [SerializeField] private bool rotatePosition180 = true;
+    [SerializeField] private bool rotatePosition180;
     [SerializeField] private bool flipX;
-    [SerializeField] private bool flipY = true;
-    [SerializeField, Range(0f, 1f)] private float smoothing = 0.18f;
+    [SerializeField] private bool flipY;
+    [SerializeField, Range(0f, 1f)] private float smoothing = 0.04f;
     [SerializeField] private float lostTimeout = 0.35f;
 
     [Header("Detection")]
-    [SerializeField, Range(1, 2)] private int maxHands = 1;
+    [SerializeField, Range(1, 4)] private int maxHands = 2;
     [SerializeField, Range(0f, 1f)] private float minHandDetectionConfidence = 0.5f;
     [SerializeField, Range(0f, 1f)] private float minHandPresenceConfidence = 0.5f;
     [SerializeField, Range(0f, 1f)] private float minTrackingConfidence = 0.5f;
 
     public Vector2 NormalizedPosition { get; private set; } = new Vector2(0.5f, 0.5f);
+    public int HandCount { get; private set; }
     public bool HandVisible { get; private set; }
     public string ActiveCameraName { get; private set; } = "";
     public Texture CurrentCameraTexture => webCamTexture;
     public bool RotatePosition180 => rotatePosition180;
     public bool FlipX => flipX;
     public bool FlipY => flipY;
+
+    public void ConfigurePositionMapping(bool rotate180, bool shouldFlipX, bool shouldFlipY, float smoothingAmount)
+    {
+        rotatePosition180 = rotate180;
+        flipX = shouldFlipX;
+        flipY = shouldFlipY;
+        smoothing = Mathf.Clamp01(smoothingAmount);
+    }
 
     private WebCamTexture webCamTexture;
     private TextureFramePool textureFramePool;
@@ -52,6 +61,8 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
     private Coroutine runCoroutine;
     private float lastSeenTime = -1000f;
     private readonly Stopwatch stopwatch = new Stopwatch();
+    private readonly Vector2[] normalizedPositions = new Vector2[4];
+    private readonly bool[] handSlotInitialized = new bool[4];
 
     private void Awake()
     {
@@ -77,6 +88,8 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
         if (HandVisible && Time.time - lastSeenTime > lostTimeout)
         {
             HandVisible = false;
+            HandCount = 0;
+            ClearHandSlots();
         }
     }
 
@@ -115,11 +128,17 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
             yield break;
         }
 
+        for (int i = 0; i < devices.Length; i++)
+        {
+            string cameraType = GetCameraTypeLabel(devices[i].name);
+            UnityEngine.Debug.Log($"[Display2MediaPipe] Camera device {i}: {devices[i].name} ({cameraType})");
+        }
+
         int selectedIndex = SelectCameraIndex(devices);
         ActiveCameraName = devices[selectedIndex].name;
         webCamTexture = new WebCamTexture(ActiveCameraName, requestedWidth, requestedHeight, requestedFps);
         webCamTexture.Play();
-        UnityEngine.Debug.Log($"[Display2MediaPipe] Camera connected: {ActiveCameraName}");
+        UnityEngine.Debug.Log($"[Display2MediaPipe] Camera connected: {ActiveCameraName} (index {selectedIndex})");
 
         float waitStart = Time.realtimeSinceStartup;
         while (webCamTexture.width < 64 && Time.realtimeSinceStartup - waitStart < 3f)
@@ -177,6 +196,7 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
                 else if (Time.time - lastSeenTime > lostTimeout)
                 {
                     HandVisible = false;
+                    HandCount = 0;
                 }
             }
         }
@@ -200,9 +220,19 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
             return cameraDeviceIndex;
         }
 
+        // Prefer a true external camera for Display 2 hand tracking.
         for (int i = 0; i < devices.Length; i++)
         {
-            if (!LooksLikeBuiltInCamera(devices[i].name))
+            if (!LooksLikeBuiltInCamera(devices[i].name) && !LooksLikeContinuityCamera(devices[i].name))
+            {
+                return i;
+            }
+        }
+
+        // If there is no USB/external camera, use iPhone Continuity Camera before MacBook built-in.
+        for (int i = 0; i < devices.Length; i++)
+        {
+            if (LooksLikeContinuityCamera(devices[i].name))
             {
                 return i;
             }
@@ -220,8 +250,33 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
 
         return deviceName.IndexOf("MacBook", StringComparison.OrdinalIgnoreCase) >= 0 ||
             deviceName.IndexOf("FaceTime", StringComparison.OrdinalIgnoreCase) >= 0 ||
-            deviceName.IndexOf("Built-in", StringComparison.OrdinalIgnoreCase) >= 0 ||
-            deviceName.IndexOf("Continuity", StringComparison.OrdinalIgnoreCase) >= 0;
+            deviceName.IndexOf("Built-in", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static bool LooksLikeContinuityCamera(string deviceName)
+    {
+        if (string.IsNullOrEmpty(deviceName))
+        {
+            return false;
+        }
+
+        return deviceName.IndexOf("Continuity", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            deviceName.IndexOf("iPhone", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static string GetCameraTypeLabel(string deviceName)
+    {
+        if (LooksLikeBuiltInCamera(deviceName))
+        {
+            return "built-in";
+        }
+
+        if (LooksLikeContinuityCamera(deviceName))
+        {
+            return "continuity/iPhone";
+        }
+
+        return "external";
     }
 
     private void UpdatePositionFromResult(HandLandmarkerResult result)
@@ -229,31 +284,88 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
         if (result.handLandmarks == null || result.handLandmarks.Count == 0)
         {
             HandVisible = false;
+            HandCount = 0;
+            ClearHandSlots();
             return;
         }
 
-        NormalizedLandmarks hand = result.handLandmarks[0];
-        if (hand.landmarks == null || hand.landmarks.Count <= landmarkIndex)
+        int count = Mathf.Min(result.handLandmarks.Count, normalizedPositions.Length);
+        int validCount = 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            NormalizedLandmarks hand = result.handLandmarks[i];
+            if (hand.landmarks == null || hand.landmarks.Count <= landmarkIndex)
+            {
+                continue;
+            }
+
+            NormalizedLandmark landmark = hand.landmarks[landmarkIndex];
+            float x = flipX ? 1f - landmark.x : landmark.x;
+            float y = flipY ? 1f - landmark.y : landmark.y;
+
+            if (rotatePosition180)
+            {
+                x = 1f - x;
+                y = 1f - y;
+            }
+
+            Vector2 target = new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y));
+            float lerpAmount = smoothing <= 0f ? 1f : 1f - Mathf.Pow(smoothing, Time.deltaTime * 60f);
+            if (!handSlotInitialized[validCount])
+            {
+                normalizedPositions[validCount] = target;
+                handSlotInitialized[validCount] = true;
+            }
+            else
+            {
+                normalizedPositions[validCount] = Vector2.Lerp(normalizedPositions[validCount], target, lerpAmount);
+            }
+
+            validCount++;
+        }
+
+        if (validCount == 0)
         {
             HandVisible = false;
+            HandCount = 0;
+            ClearHandSlots();
             return;
         }
 
-        NormalizedLandmark landmark = hand.landmarks[landmarkIndex];
-        float x = flipX ? 1f - landmark.x : landmark.x;
-        float y = flipY ? 1f - landmark.y : landmark.y;
-
-        if (rotatePosition180)
+        for (int i = validCount; i < handSlotInitialized.Length; i++)
         {
-            x = 1f - x;
-            y = 1f - y;
+            handSlotInitialized[i] = false;
         }
 
-        Vector2 target = new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y));
-        float lerpAmount = smoothing <= 0f ? 1f : 1f - Mathf.Pow(smoothing, Time.deltaTime * 60f);
-        NormalizedPosition = Vector2.Lerp(NormalizedPosition, target, lerpAmount);
-        HandVisible = true;
+        HandCount = validCount;
+        NormalizedPosition = normalizedPositions[0];
+        HandVisible = validCount > 0;
         lastSeenTime = Time.time;
+    }
+
+    public int CopyNormalizedPositions(Vector2[] destination)
+    {
+        if (destination == null || !HandVisible)
+        {
+            return 0;
+        }
+
+        int count = Mathf.Min(HandCount, destination.Length, normalizedPositions.Length);
+        for (int i = 0; i < count; i++)
+        {
+            destination[i] = normalizedPositions[i];
+        }
+
+        return count;
+    }
+
+    private void ClearHandSlots()
+    {
+        for (int i = 0; i < handSlotInitialized.Length; i++)
+        {
+            handSlotInitialized[i] = false;
+        }
     }
 
     private static byte[] LoadHandLandmarkerModel()
@@ -307,5 +419,7 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
         }
 
         HandVisible = false;
+        HandCount = 0;
+        ClearHandSlots();
     }
 }

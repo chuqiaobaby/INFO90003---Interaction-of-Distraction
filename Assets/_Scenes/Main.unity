@@ -713,19 +713,35 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ActivateProjector
   projectorDisplayIndex: 1
-  projectorCamera: {fileID: 0}
+  projectorCamera: {fileID: 1592376375}
   createPastelProjection: 1
   manualTriggerKey: 32
   backgroundColor: {r: 0, g: 0, b: 0, a: 0}
-  strokeOpacity: 0.96
-  rippleDuration: 2.2
-  maxRippleRadius: 0.86
-  grainStrength: 0.045
+  strokeOpacity: 1
+  rippleDuration: 2.8
+  maxRippleRadius: 0.62
+  grainStrength: 0.18
+  flowSpeed: 0.72
+  trailLength: 3
+  bloomBoost: 4
+  handInfluence: 2.25
+  particleDensity: 1.5
+  interactionRadius: 0.456
+  continuousTrailStrength: 2.6
   cameraHeight: 5
   projectionHeight: 0
+  showExternalCameraAsBackground: 1
+  debugBackgroundFlipX: 0
+  debugBackgroundFlipY: 0
   useHandTrackingPosition: 1
+  useMediaPipeHandTracking: 1
+  mediaPipeHandVisibleTriggersRipple: 0
   useMousePositionWhenHandMissing: 1
-  repeatRippleWhileTouching: 0.45
+  repeatRippleWhileTouching: 0
+  handTrackingRotatePosition180: 0
+  handTrackingFlipX: 0
+  handTrackingFlipY: 0
+  handTrackingSmoothing: 0.04
 --- !u!4 &765055270
 Transform:
   m_ObjectHideFlags: 0
@@ -971,7 +987,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 118.638435, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.6703, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1236,7 +1252,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 118.638435, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.6703, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
