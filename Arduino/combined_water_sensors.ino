@@ -12,7 +12,7 @@
  */
 
 // Uncomment to see sound sensor values for calibration
-#define DEBUG_SOUND
+//#define DEBUG_SOUND
 
 #include <FastLED.h>
 
@@ -21,7 +21,7 @@
 #define BRIGHTNESS      100
 
 #define TOUCH_PIN       4
-#define TOUCH_THRESHOLD 800
+#define TOUCH_THRESHOLD 350
 
 CRGB leds[NUM_LEDS];
 
@@ -80,6 +80,21 @@ int soundHighCount = 0;
 bool stableBlowing = false;
 bool isBlowing = false;
 
+bool previousTouchState = false;
+bool previousTouchReading = false;
+bool stableTouchState = false;
+
+bool previousBlowState = false;
+
+unsigned long groundingStartTime = 0;
+bool groundingActive = false;
+
+const unsigned long GROUNDING_ANIMATION_TIME = 5000; // 5 seconds
+
+bool groundingLatched = false;
+
+unsigned long touchChangeTime = 0;
+const unsigned long TOUCH_DEBOUNCE_MS = 200;
 // Blow detection timing
 unsigned long blowStartTime = 0;
 bool blowDetected = false;
@@ -106,6 +121,9 @@ void setup() {
 }
 
 void loop() {
+  // ====== DECLARE CURRENT TIME FIRST ======
+  unsigned long currentTime = millis();  // MOVED TO TOP!
+  
   // ====== READ WATER LEVEL (0-3) ======
   // Sensors use inverted logic (NPN pulls LOW when active)
   bool low  = isTriggered(sensorLow);
@@ -120,132 +138,184 @@ void loop() {
   
   // ====== READ TOUCH SENSOR (0 or 1) ======
   int touchValue = touchRead(TOUCH_PIN);
-  int isTouching = (touchValue < TOUCH_THRESHOLD) ? 1 : 0;
+  bool rawTouch = (touchValue < TOUCH_THRESHOLD);
 
-    // ====== READ GROUNDING SENSORS (0 or 1) ======
+  // Detect change
+  if (rawTouch != previousTouchReading) {
+      touchChangeTime = currentTime;
+  }
+
+  // If stable for long enough, accept new state
+  if ((currentTime - touchChangeTime) > TOUCH_DEBOUNCE_MS) {
+      stableTouchState = rawTouch;
+  }
+
+  previousTouchReading = rawTouch;
+
+  int isTouching = stableTouchState ? 1 : 0;
+
+  // ====== READ GROUNDING SENSORS (0 or 1) ======
   int leftValue  = analogRead(ldrLeft);
   int rightValue = analogRead(ldrRight);
   bool isGrounding = (leftValue < DARK_THRESHOLD) && (rightValue < DARK_THRESHOLD) ? 1 : 0;
   
-// ====== SOUND SENSOR ======
+  // ====== SOUND SENSOR ======
+  int rawSound = digitalRead(soundPin);
 
-unsigned long currentTime = millis();
-
-int rawSound = digitalRead(soundPin);
-
-// start window
-if (soundWindowStart == 0) {
-  soundWindowStart = currentTime;
-}
-
-// count highs in window
-if (rawSound == HIGH) {
-  soundHighCount++;
-}
-
-// end window → evaluate
-if (currentTime - soundWindowStart >= SOUND_WINDOW_MS) {
-
-  if (soundHighCount > (SOUND_WINDOW_MS / 20) * 0.6) {
-    stableBlowing = true;
-  } else {
-    stableBlowing = false;
+  // start window
+  if (soundWindowStart == 0) {
+    soundWindowStart = currentTime;
   }
 
-  // reset window
-  soundWindowStart = currentTime;
-  soundHighCount = 0;
+  // count highs in window
+  if (rawSound == HIGH) {
+    soundHighCount++;
+  }
+
+  // end window → evaluate
+  if (currentTime - soundWindowStart >= SOUND_WINDOW_MS) {
+
+    if (soundHighCount > (SOUND_WINDOW_MS / 20) * 0.6) {
+      stableBlowing = true;
+    } else {
+      stableBlowing = false;
+    }
+
+    // reset window
+    soundWindowStart = currentTime;
+    soundHighCount = 0;
   }
 
   isBlowing = stableBlowing ? 1 : 0;
 
-//Motor Control
-if(isBlowing == 1 && !motorActive){
-  digitalWrite(motorDIR, LOW);
-  analogWrite(motorPWM, 200);
-
-  motorStartTime = currentTime;
-
-  motorActive = true;
-} else {
-  if(currentTime - motorStartTime >= MOTOR_RUNTIME){
+  //Motor Control
+  if(isBlowing == 1 && !motorActive){
     digitalWrite(motorDIR, LOW);
-    analogWrite(motorPWM, 0);
+    analogWrite(motorPWM, 200);
 
-    motorActive = false;
-    motorStartTime = 0;
-  }
-}
-  
-  if (currentTime - lastLedUpdate >= LED_UPDATE_INTERVAL) {
-  lastLedUpdate = currentTime;
+    motorStartTime = currentTime;
 
-  if(isTouching){
-     // Create rainbow
-        fill_rainbow(leds, NUM_LEDS, hue, 5);
-
-        // Apply pulsing brightness
-        FastLED.setBrightness(pulseBrightness);
-
-        FastLED.show();
-
-        // Cycle rainbow colours
-        hue++;
-
-        // Update pulse brightness
-        pulseBrightness += pulseDirection * 2;
-
-        // Reverse pulse direction at limits
-        if (pulseBrightness >= BRIGHTNESS || pulseBrightness <= 10) {
-            pulseDirection *= -1;
-        }
+    motorActive = true;
   } else {
-            // LEDs OFF
-        FastLED.clear();
-        FastLED.show();
+    if(currentTime - motorStartTime >= MOTOR_RUNTIME){
+      digitalWrite(motorDIR, LOW);
+      analogWrite(motorPWM, 0);
 
-        // Reset pulse when inactive
-        pulseBrightness = 10;
-        pulseDirection = 1;
+      motorActive = false;
+      motorStartTime = 0;
     }
   }
+
+bool blowStarted = (isBlowing == 1 && !previousBlowState);
+
+if (blowStarted) {
+
+    // ONLY triggers once per blowing event
+    FastLED.clear(true);
+    FastLED.show();
+
+    // Optional: reset states so system restarts cleanly
+    groundingLatched = false;
+    groundingStartTime = 0;
+
+} else {
+
+if (isGrounding && !groundingLatched) {
+
+    // Start timing (only once)
+    if (groundingStartTime == 0) {
+        groundingStartTime = currentTime;
+    }
+
+    float progress = (float)(currentTime - groundingStartTime) / 5000.0;
+
+    // If completed → latch ON permanently
+    if (progress >= 1.0) {
+        groundingLatched = true;
+        progress = 1.0;
+    }
+
+    int litLEDs = progress * NUM_LEDS;
+
+    for (int i = 0; i < NUM_LEDS; i++) {
+        if (i < litLEDs) {
+            leds[i] = CHSV(0, 0, 255); // white
+        } else {
+            leds[i] = CRGB::Black;
+        }
+    }
+
+    FastLED.show();
+
+} else {
+
+    // ❗ RESET if grounding stops BEFORE latch
+    if (!groundingLatched) {
+        groundingStartTime = 0;
+
+        FastLED.clear(true);
+    }
+
+    // After latch → stay ON permanently
+    if (groundingLatched) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+            leds[i] = CHSV(0, 0, 255);
+        }
+        FastLED.show();
+    }
+
+    // Normal touch only if not latched
+    if (!groundingLatched) {
+
+        if (isTouching) {
+
+            if (!previousTouchState) {
+                hue += 32;
+            }
+
+            for (int i = 0; i < NUM_LEDS; i++) {
+                leds[i] = CHSV(hue, 255, 255);
+            }
+
+            FastLED.show();
+
+        }
+    }
+
+    previousTouchState = isTouching;
+  }
+}
+
+previousBlowState = isBlowing;
   
   if (currentTime - lastSerialUpdate >= SERIAL_UPDATE_INTERVAL) {
     lastSerialUpdate = currentTime;
 
 #ifdef DEBUG_SOUND
-Serial.print("Sound: ");
-Serial.print(digitalRead(soundPin));
-Serial.print(" | Blowing: ");
-Serial.println(isBlowing);
+    Serial.print("Sound: ");
+    Serial.print(digitalRead(soundPin));
+    Serial.print(" | Blowing: ");
+    Serial.println(isBlowing);
 #endif
 
-  /*int high = analogRead(sensorHigh);
-  Serial.print("Water High:");
-  Serial.print(high);
-  int mid = analogRead(sensorMid);
-  Serial.print(" Water Mid:");
-  Serial.print(mid);
-  int low = analogRead(sensorLow);
-  Serial.print(" Water Low:");
-  Serial.println(low);*/
+    /*Serial.print("Left LDR:");
+    Serial.print(leftValue);
+    Serial.print("Right LDR:");
+    Serial.println(rightValue);*/
 
-  /*Serial.print("Left LDR:");
-  Serial.print(leftValue);
-  Serial.print(" Right LDR:");
-  Serial.println(rightValue);*/
+    /*Serial.print("Touch Value:");
+    Serial.println(touchValue);*/
 
+    // ====== SEND DATA TO UNITY ======
+    // Format: [WaterLevel],[IsTouching],[IsGrounding],[IsBlowing]
+    Serial.print(waterLevel);
+    Serial.print(",");
+    Serial.print(isTouching);
+    Serial.print(",");
+    Serial.print(isGrounding);
+    Serial.print(",");
+    Serial.println(isBlowing);
+  }
   
-  // ====== SEND DATA TO UNITY ======
-  // Format: [WaterLevel],[IsTouching],[IsGrounding],[IsBlowing]
-  Serial.print(waterLevel);
-  Serial.print(",");
-  Serial.print(isTouching);
-  Serial.print(",");
-  Serial.print(isGrounding);
-  Serial.print(",");
-  Serial.println(isBlowing);
-  
-  delay(1);  // Sampling rate - adjust as needed
-}
+  delay(25);  // Sampling rate - adjust as needed
 }
