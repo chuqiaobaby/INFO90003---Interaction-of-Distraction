@@ -7,8 +7,17 @@ public class WebCamManager : MonoBehaviour
     public MeshRenderer backgroundQuad;
 
     [Header("Display 1 Camera")]
-    [SerializeField] private string preferredCameraNameContains = "MacBook";
-    [SerializeField] private int fallbackCameraDeviceIndex = 0;
+    [Tooltip("Optional manual override. Leave empty to automatically choose an external camera.")]
+    [SerializeField] private string preferredCameraNameContains = "Logitech MeetUp";
+    [Tooltip("-1 = automatically choose by external camera order. Use a fixed index only for manual override.")]
+    [SerializeField] private int fallbackCameraDeviceIndex = -1;
+    [Tooltip("0 = first external camera, 1 = second external camera. Used only if Preferred Camera Name does not match.")]
+    [SerializeField] private int externalCameraOrdinal = 0;
+    [SerializeField] private int requestedWidth = 1280;
+    [SerializeField] private int requestedHeight = 720;
+    [SerializeField] private int requestedFps = 30;
+    [Tooltip("Flip Display 1 vertically. Use this when the physical camera view is upside down.")]
+    [SerializeField] private bool forceFlipY = true;
 
     private WebCamTexture webcamTexture;
     private int lastScreenW = -1;
@@ -20,17 +29,25 @@ public class WebCamManager : MonoBehaviour
 
         if (devices.Length > 0)
         {
+            for (int i = 0; i < devices.Length; i++)
+            {
+                string cameraType = GetCameraTypeLabel(devices[i].name);
+                Debug.Log($"[WebCamManager] Camera device {i}: {devices[i].name} ({cameraType})");
+            }
+
             int selectedIndex = SelectCameraIndex(devices);
-            webcamTexture = new WebCamTexture(devices[selectedIndex].name);
+            webcamTexture = new WebCamTexture(devices[selectedIndex].name, requestedWidth, requestedHeight, requestedFps);
             backgroundQuad.material.SetTexture("_WebcamTex", webcamTexture);
             backgroundQuad.material.SetFloat("_FlipX", 0f);
             webcamTexture.Play();
-            Debug.Log("[WebCamManager] Camera connected: " + devices[selectedIndex].name);
+            Debug.Log($"[WebCamManager] Camera connected: {devices[selectedIndex].name} (index {selectedIndex})");
 
             yield return null; // wait one frame for videoVerticallyMirrored and real resolution
             float flipY = webcamTexture.videoVerticallyMirrored ? 1f : 0f;
+            if (forceFlipY)
+                flipY = 1f - flipY;
             backgroundQuad.material.SetFloat("_FlipY", flipY);
-            Debug.Log($"[WebCamManager] videoVerticallyMirrored={webcamTexture.videoVerticallyMirrored} → _FlipY={flipY}");
+            Debug.Log($"[WebCamManager] videoVerticallyMirrored={webcamTexture.videoVerticallyMirrored}, forceFlipY={forceFlipY} → _FlipY={flipY}");
 
             ApplyAspectCorrection();
         }
@@ -54,7 +71,61 @@ public class WebCamManager : MonoBehaviour
         if (fallbackCameraDeviceIndex >= 0 && fallbackCameraDeviceIndex < devices.Length)
             return fallbackCameraDeviceIndex;
 
-        return 0;
+        int externalSeen = 0;
+        for (int i = 0; i < devices.Length; i++)
+        {
+            if (LooksLikeBuiltInCamera(devices[i].name) || LooksLikeContinuityCamera(devices[i].name))
+                continue;
+
+            if (externalSeen == Mathf.Max(0, externalCameraOrdinal))
+                return i;
+
+            externalSeen++;
+        }
+
+        for (int i = 0; i < devices.Length; i++)
+        {
+            if (!LooksLikeBuiltInCamera(devices[i].name) && !LooksLikeContinuityCamera(devices[i].name))
+                return i;
+        }
+
+        for (int i = 0; i < devices.Length; i++)
+        {
+            if (LooksLikeContinuityCamera(devices[i].name))
+                return i;
+        }
+
+        return devices.Length > 1 ? 1 : 0;
+    }
+
+    private static bool LooksLikeBuiltInCamera(string deviceName)
+    {
+        if (string.IsNullOrEmpty(deviceName))
+            return false;
+
+        return deviceName.IndexOf("MacBook", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+            deviceName.IndexOf("FaceTime", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+            deviceName.IndexOf("Built-in", System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static bool LooksLikeContinuityCamera(string deviceName)
+    {
+        if (string.IsNullOrEmpty(deviceName))
+            return false;
+
+        return deviceName.IndexOf("Continuity", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+            deviceName.IndexOf("iPhone", System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static string GetCameraTypeLabel(string deviceName)
+    {
+        if (LooksLikeBuiltInCamera(deviceName))
+            return "built-in";
+
+        if (LooksLikeContinuityCamera(deviceName))
+            return "continuity/iPhone";
+
+        return "external";
     }
 
     void Update()

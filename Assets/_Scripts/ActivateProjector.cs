@@ -29,6 +29,15 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField] private bool debugBackgroundFlipX;
     [SerializeField] private bool debugBackgroundFlipY;
 
+    [Header("Display 2 Camera")]
+    [Tooltip("Camera name substring for Display 2 MediaPipe tracking. Leave empty to use automatic external camera selection.")]
+    [SerializeField] private string mediaPipePreferredCameraNameContains = "C922 Pro Stream Webcam";
+    [Tooltip("Fallback rule for garbled camera names: Display 2 will avoid this Display 1 camera and use another external camera.")]
+    [SerializeField] private string mediaPipeAvoidCameraNameContains = "Logitech MeetUp";
+    [Tooltip("-1 = choose by camera name/external order. Use only for temporary manual override.")]
+    [SerializeField] private int mediaPipeCameraDeviceIndex = -1;
+    [SerializeField] private int mediaPipeExternalCameraOrdinal = 0;
+
     [Header("Hand Tracking")]
     [SerializeField] private bool useHandTrackingPosition = true;
     [SerializeField] private bool useMediaPipeHandTracking = true;
@@ -64,6 +73,12 @@ public class ActivateProjector : MonoBehaviour
             {
                 mediaPipeHandTracking = gameObject.AddComponent<Display2MediaPipeHandTracker>();
             }
+
+            mediaPipeHandTracking.ConfigureCameraSelection(
+                mediaPipePreferredCameraNameContains,
+                mediaPipeAvoidCameraNameContains,
+                mediaPipeCameraDeviceIndex,
+                mediaPipeExternalCameraOrdinal);
 
             mediaPipeHandTracking.ConfigurePositionMapping(
                 handTrackingRotatePosition180,

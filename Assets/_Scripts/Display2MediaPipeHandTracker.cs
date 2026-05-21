@@ -17,7 +17,11 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
     [Header("Camera")]
     [Tooltip("-1 = automatically choose an external camera. Use a fixed index only for manual override.")]
     [SerializeField] private int cameraDeviceIndex = -1;
-    [SerializeField] private string preferredCameraNameContains = "";
+    [SerializeField] private string preferredCameraNameContains = "C922 Pro Stream Webcam";
+    [Tooltip("Fallback rule: when the preferred name is not reported correctly by macOS/Unity, avoid this camera name and use another external camera.")]
+    [SerializeField] private string avoidCameraNameContains = "Logitech MeetUp";
+    [Tooltip("0 = first matching external camera, 1 = second matching external camera. Used only after name matching and avoid filtering.")]
+    [SerializeField] private int externalCameraOrdinal = 0;
     [SerializeField] private int requestedWidth = 1280;
     [SerializeField] private int requestedHeight = 720;
     [SerializeField] private int requestedFps = 30;
@@ -45,6 +49,14 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
     public bool RotatePosition180 => rotatePosition180;
     public bool FlipX => flipX;
     public bool FlipY => flipY;
+
+    public void ConfigureCameraSelection(string preferredNameContains, string avoidNameContains, int deviceIndex, int externalOrdinal)
+    {
+        preferredCameraNameContains = preferredNameContains ?? string.Empty;
+        avoidCameraNameContains = avoidNameContains ?? string.Empty;
+        cameraDeviceIndex = deviceIndex;
+        externalCameraOrdinal = externalOrdinal;
+    }
 
     public void ConfigurePositionMapping(bool rotate180, bool shouldFlipX, bool shouldFlipY, float smoothingAmount)
     {
@@ -79,8 +91,16 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
     {
         if (runCoroutine == null)
         {
-            runCoroutine = StartCoroutine(Run());
+            runCoroutine = StartCoroutine(RunAfterConfiguration());
         }
+    }
+
+    private IEnumerator RunAfterConfiguration()
+    {
+        // ActivateProjector adds this component at runtime, then immediately applies
+        // the Inspector camera-name settings. Wait one frame so those settings win.
+        yield return null;
+        yield return Run();
     }
 
     private void Update()
@@ -220,7 +240,24 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
             return cameraDeviceIndex;
         }
 
-        // Prefer a true external camera for Display 2 hand tracking.
+        // Prefer a true external camera for Display 2 hand tracking. If the C922 name
+        // is garbled by macOS/Unity, use the external camera that is not reserved for Display 1.
+        int externalSeen = 0;
+        for (int i = 0; i < devices.Length; i++)
+        {
+            if (!IsSelectableFallbackExternal(devices[i].name))
+            {
+                continue;
+            }
+
+            if (externalSeen == Mathf.Max(0, externalCameraOrdinal))
+            {
+                return i;
+            }
+
+            externalSeen++;
+        }
+
         for (int i = 0; i < devices.Length; i++)
         {
             if (!LooksLikeBuiltInCamera(devices[i].name) && !LooksLikeContinuityCamera(devices[i].name))
@@ -239,6 +276,22 @@ public sealed class Display2MediaPipeHandTracker : MonoBehaviour
         }
 
         return devices.Length > 1 ? 1 : 0;
+    }
+
+    private bool IsSelectableFallbackExternal(string deviceName)
+    {
+        if (LooksLikeBuiltInCamera(deviceName) || LooksLikeContinuityCamera(deviceName))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(avoidCameraNameContains) &&
+            deviceName.IndexOf(avoidCameraNameContains, StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static bool LooksLikeBuiltInCamera(string deviceName)

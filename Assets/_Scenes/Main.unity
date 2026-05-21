@@ -164,6 +164,13 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WebCamManager
   backgroundQuad: {fileID: 876773103}
+  preferredCameraNameContains: Logitech MeetUp
+  fallbackCameraDeviceIndex: -1
+  externalCameraOrdinal: 0
+  requestedWidth: 1280
+  requestedHeight: 720
+  requestedFps: 30
+  forceFlipY: 1
 --- !u!1 &260361347
 GameObject:
   m_ObjectHideFlags: 0
@@ -730,9 +737,13 @@ MonoBehaviour:
   continuousTrailStrength: 2.6
   cameraHeight: 5
   projectionHeight: 0
-  showExternalCameraAsBackground: 1
+  showExternalCameraAsBackground: 0
   debugBackgroundFlipX: 0
   debugBackgroundFlipY: 0
+  mediaPipePreferredCameraNameContains: C922 Pro Stream Webcam
+  mediaPipeAvoidCameraNameContains: Logitech MeetUp
+  mediaPipeCameraDeviceIndex: -1
+  mediaPipeExternalCameraOrdinal: 0
   useHandTrackingPosition: 1
   useMediaPipeHandTracking: 1
   mediaPipeHandVisibleTriggersRipple: 0
@@ -987,7 +998,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.6703, y: 57.735027, z: 1}
+  m_LocalScale: {x: 229.02359, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1252,7 +1263,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.6703, y: 57.735027, z: 1}
+  m_LocalScale: {x: 229.02359, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
