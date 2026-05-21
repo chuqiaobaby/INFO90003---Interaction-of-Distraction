@@ -16,7 +16,7 @@
 
 #include <FastLED.h>
 
-#define LED_PIN         13
+#define LED_PIN         26
 #define NUM_LEDS        150
 #define BRIGHTNESS      100
 
@@ -52,13 +52,16 @@ uint8_t pulseBrightness = 0;
 int pulseDirection = 1;
 
 // ====== GROUNDING SENSORS (LDRs) ======
-const int ldrLeft  = 34;
-const int ldrRight = 39;
+const int ldrLeft  = 39;
+const int ldrRight = 36;
 const int DARK_THRESHOLD = 160;  // Calibrate as needed to esnure LDRs are covered
 
 // ================= MOTOR =================
 const int motorDIR = 12; 
 const int motorPWM = 27;
+
+const int motor2DIR = 33;
+const int motor2PWM = 13;
 
 // Motor State
 const unsigned int MOTOR_RUNTIME = 10000;
@@ -70,7 +73,7 @@ bool motorActive = false;
 // Sensor outputs:
 // HIGH (1) = idle / no blow
 // LOW  (0) = sound detected
-const int soundPin = 33;
+const int soundPin = 34;
 
 const int BLOW_DURATION_MS = 120;
 const int SOUND_WINDOW_MS = 200;
@@ -115,9 +118,13 @@ void setup() {
   // Motor
   pinMode(motorDIR, OUTPUT);
   pinMode(motorPWM, OUTPUT);
+  pinMode(motor2DIR, OUTPUT);
+  pinMode(motor2PWM, OUTPUT);
 
   digitalWrite(motorDIR, LOW);
   analogWrite(motorPWM, 0);
+  digitalWrite(motor2DIR, LOW);
+  analogWrite(motor2PWM, 0);
 }
 
 void loop() {
@@ -175,7 +182,7 @@ void loop() {
   // end window → evaluate
   if (currentTime - soundWindowStart >= SOUND_WINDOW_MS) {
 
-    if (soundHighCount > (SOUND_WINDOW_MS / 20) * 0.6) {
+    if (soundHighCount > (SOUND_WINDOW_MS / 20) * 0.7) {
       stableBlowing = true;
     } else {
       stableBlowing = false;
@@ -191,7 +198,9 @@ void loop() {
   //Motor Control
   if(isBlowing == 1 && !motorActive){
     digitalWrite(motorDIR, LOW);
-    analogWrite(motorPWM, 200);
+    analogWrite(motorPWM, 150);
+    digitalWrite(motor2DIR, LOW);
+    analogWrite(motor2PWM, 150);
 
     motorStartTime = currentTime;
 
@@ -200,6 +209,8 @@ void loop() {
     if(currentTime - motorStartTime >= MOTOR_RUNTIME){
       digitalWrite(motorDIR, LOW);
       analogWrite(motorPWM, 0);
+      digitalWrite(motor2DIR, LOW);
+      analogWrite(motor2PWM, 0);
 
       motorActive = false;
       motorStartTime = 0;
@@ -298,6 +309,11 @@ previousBlowState = isBlowing;
     Serial.println(isBlowing);
 #endif
 
+    /*Serial.print("Motor PWR: ");
+    Serial.print(motorPWM);
+    Serial.print(" Motor Activity: ");
+    Serial.println(motorActive);*/
+
     /*Serial.print("Left LDR:");
     Serial.print(leftValue);
     Serial.print("Right LDR:");
@@ -305,6 +321,8 @@ previousBlowState = isBlowing;
 
     /*Serial.print("Touch Value:");
     Serial.println(touchValue);*/
+
+    //Serial.println(rawSound);
 
     // ====== SEND DATA TO UNITY ======
     // Format: [WaterLevel],[IsTouching],[IsGrounding],[IsBlowing]
