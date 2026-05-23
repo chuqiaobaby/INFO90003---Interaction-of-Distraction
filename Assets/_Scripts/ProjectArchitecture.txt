@@ -1,0 +1,74 @@
+System Architecture & HCI Mapping: "From Distraction to Purification"
+This document outlines the full data flow of the tangible installation, from physical input to digital VFX and physical feedback, along with the underlying psychological metaphors.
+
+1. Input: Physical Sensors & Triggers
+These are the "sensory organs" of the installation, capturing user interactions and tangible item placements. All sensors are connected to the ESP32.
+Hardware Component
+Placement
+Trigger Action (User Interaction)
+Signal Type & Logic
+Non-contact Liquid Level Sensor (x3)
+Taped to the outside wall of the clear basin at Low, Mid, and High levels.
+User drops items or plunges hands into the water, causing physical water displacement (volume increase).
+Digital (HIGH/LOW): Outputs HIGH when the water level rises past the sensor's height. Immune to hand capacitance.
+Water Touch Wire (x1)
+Draped over the basin edge, tip slightly submerged in the water.
+User's fingertip gently touches or plays with the water surface.
+Analog: ESP32 Touch Pin detects an instant capacitive spike caused by human conductivity.
+LDR (Photoresistor) (x2)
+Installed at the bottom of the 3D-printed pedestal's solid support pillars (shielded from internal LEDs).
+User presses both hands firmly against the bottom of the basin, blocking ambient light.
+Analog: Light reading drops below a specific threshold due to the shadow cast by the hands.
+Sound Sensor (x1)
+Behind a dedicated blowhole on the side of the 3D-printed base.
+User blows air into the device.
+Analog: Microphone detects the audio spike/peak from the breath.
+
+
+2. Processing & Transmission: ESP32 Microcontroller
+The ESP32 acts as the central brain. It continuously polls the physical sensors and formats the data for Unity.
+Logic: The Arduino loop() reads all sensor states in real-time.
+Serial Communication: Data is sent to the PC via USB Serial (Baud Rate: 115200).
+Data Formatting: The ESP32 packages the states into a simple, comma-separated string to prevent parsing errors in Unity.
+Format: [WaterLevel],[IsTouching],[IsGrounding],[IsBlowing]
+Example: 2,1,0,0 (Water is at Mid-level, Hand is currently touching the surface, No bottom press, No blowing).
+
+3. Software Engine: Unity VFX & Logic
+Unity receives the raw data string, parses it, and drives the audiovisual experience using FaceMesh and URP Shader Graphs.
+Data Reception (C#): A SerialController script reads the incoming string and updates four global variables (Level, isTouching, isGrounding, isBlowing).
+
+VFX Mapping (FaceMesh + URP Shader Graph):
+Base Layer: Webcam captures the face, FaceMesh covers the face, running your "Fluid Water Ripple Shader".
+Parameter Linkage (Combined with Dual-Layer Decay Logic):
+Permanent Layer: When Level increases (1 -> 2 -> 3): Increases the Distortion and Chromatic Aberration of the Shader. This represents the irreversible global background noise.
+Temporary Layer: When isTouching == 1: Triggers a momentary, localized Glitch (noise or ripple oscillation) on the face Shader.
+Dynamic Decay: The fade-out speed of this localized Glitch or ripple is determined by the current Level. The higher the Level, the longer it takes to dissipate; at Level 3, it no longer dissipates, merging with the global VFX to form full-screen chaos.
+
+State Machine (The Timer):
+When isGrounding == 1, a 5.0-second timer starts. If the user lifts their hands, it resets.
+Purification Shield: Upon reaching 5 seconds, the turbid parameters freeze, and a smooth, iridescent "Protective Shield" shader activates over the user's face.
+Release State: While the shield is active, if isBlowing == 1 is received, the screen clears all particle effects, returning to a pure, clear state.
+
+4. Output: Physical Environment Feedback
+The installation provides immediate tangible feedback, bridging the gap between the digital screen and the physical room.
+Output Component
+Controlled By
+Trigger Condition
+Physical Effect
+WS2812B LED Strip
+ESP32
+Syncs with Water Level & Touch
+Ambient Water State: Breathes clear blue when calm; flashes bright white on surface touch; gradients to turbid red as water level rises; switches to a flowing, healing cyan/aurora upon successful 5-sec grounding.
+5V Relay + Bubble Machine
+ESP32
+Upon Unity's 5-sec Timer Completion
+Tangible Release: The relay clicks closed, activating the battery-powered bubble machine. Physical bubbles fill the space, prompting the user to blow them away.
+
+
+5. HCI Metaphor & Psychological Meaning
+This section details the design rationale. It links the technical inputs to human emotional states (crucial for the project presentation).
+Baseline Stress (Permanent VFX): Represents the background noise of life. The higher the "water level" of our distractions, the more distorted our general perception of reality becomes.
+Sensory Overload (Temporary Ripple): In a calm state (Level 0), we can handle a "touch" or a "new item" and recover quickly. The visual ripple vanishes instantly.
+The Loss of Resilience (Dynamic Decay): As the base stress (Water Level) rises, our ability to "recover" from new distractions diminishes. The ripples linger longer, symbolizing how a cluttered mind takes more time to return to peace after a disturbance.
+The Point of Collapse (Level 3): When distraction is maxed out, recovery becomes impossible (Decay = 0). The temporary and permanent noises merge into a "Total Glitch," representing a mental breakdown or sensory burnout.
+Active Purification (The Breath): By performing a deep "Grounding" ritual (5s hold) and a physical "Breath" (blowing bubbles), the user takes a deliberate action to clear the system, moving from chaos back to clarity.
