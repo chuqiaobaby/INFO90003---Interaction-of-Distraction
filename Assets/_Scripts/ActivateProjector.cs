@@ -6,8 +6,31 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField] private int projectorDisplayIndex = 1;
     [SerializeField] private Camera projectorCamera;
 
+    [Header("Display 2 Soft Ribbon Projection")]
+    [SerializeField] private bool createRibbonProjection = true;
+    [SerializeField, Range(0.2f, 2.5f)] private float ribbonScale = 1f;
+    [SerializeField, Range(0.5f, 4f)] private float ribbonGlowIntensity = 1.6f;
+    [SerializeField, Range(0.08f, 0.6f)] private float ribbonFollowLagSeconds = 0.18f;
+    [SerializeField, Range(0.4f, 3.5f)] private float ribbonFadeSeconds = 1.65f;
+    [SerializeField] private bool enableMistParticles = true;
+    [SerializeField, Range(0f, 120f)] private float mistAmount = 34f;
+    [SerializeField, Range(0.05f, 1.4f)] private float mistSize = 0.48f;
+    [SerializeField, Range(0.2f, 4f)] private float mistLifetime = 1.75f;
+    [SerializeField, Range(0f, 2f)] private float mistSpeed = 0.24f;
+    [SerializeField, Range(0.02f, 1.2f)] private float mistSpread = 0.34f;
+    [SerializeField, Range(0f, 2f)] private float mistDrift = 0.55f;
+    [SerializeField, Range(0f, 2f)] private float mistNoiseStrength = 0.72f;
+    [SerializeField, Range(0f, 1f)] private float mistOpacity = 0.34f;
+    [SerializeField] private Color mistTint = new Color(0.10f, 1.00f, 0.60f, 1f);
+    [SerializeField] private bool enableShakeWaveBurst = true;
+    [SerializeField] private string shakeWaveResourcePath = "ShakeWaveI/Prefebs/shake_wave_1";
+    [SerializeField, Range(0.2f, 4f)] private float shakeWaveScale = 1.35f;
+    [SerializeField, Range(0.2f, 6f)] private float shakeWaveLifetime = 2.8f;
+    [SerializeField, Range(0f, 3f)] private float shakeWaveBrightness = 1.35f;
+    [SerializeField] private Color shakeWaveColor = new Color(0.16f, 1.00f, 0.42f, 1f);
+
     [Header("Display 2 Cinematic Particle Projection")]
-    [SerializeField] private bool createPastelProjection = true;
+    [SerializeField] private bool createPastelProjection = false;
     [SerializeField] private KeyCode manualTriggerKey = KeyCode.Space;
     [SerializeField] private Color backgroundColor = new Color(0f, 0f, 0f, 0f);
     [SerializeField, Range(0f, 3f)] private float strokeOpacity = 2.2f;
@@ -22,7 +45,7 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField, Range(0.25f, 1.5f)] private float interactionRadius = 0.62f;
     [SerializeField, Range(0f, 4f)] private float continuousTrailStrength = 0.8f;
     [Header("Display 2 Ribbon Cursor Feel")]
-    [SerializeField] private bool rainbowMode = true;
+    [SerializeField] private bool rainbowMode;
     [SerializeField, Range(0.02f, 0.35f)] private float cursorLagSeconds = 0.16f;
     [SerializeField, Range(0.02f, 0.35f)] private float cursorVelocityLagSeconds = 0.12f;
     [SerializeField, Range(0f, 0.08f)] private float trailSubsampleDistance = 0.016f;
@@ -80,6 +103,7 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float handTrackingSmoothing = 0.04f;
 
     private PastelClassicRippleController pastelProjection;
+    private Display2RibbonTrailController ribbonProjection;
     private Display2CameraDebugBackground debugBackground;
     private Display2MediaPipeHandTracker mediaPipeHandTracking;
     private HandTrackingUdpReceiver handTracking;
@@ -94,6 +118,11 @@ public class ActivateProjector : MonoBehaviour
         if (createPastelProjection)
         {
             SetupPastelProjection();
+        }
+
+        if (createRibbonProjection)
+        {
+            SetupRibbonProjection();
         }
 
         if (useMediaPipeHandTracking)
@@ -131,7 +160,7 @@ public class ActivateProjector : MonoBehaviour
 
     private void Update()
     {
-        if (pastelProjection == null)
+        if (pastelProjection == null && ribbonProjection == null)
         {
             return;
         }
@@ -185,7 +214,17 @@ public class ActivateProjector : MonoBehaviour
             handCount = 1;
         }
 
-        pastelProjection.SetInteractionHands(handPositionBuffer, isTouching ? handCount : 0);
+        int interactionCount = isTouching ? Mathf.Min(handCount, 2) : 0;
+        if (pastelProjection != null)
+        {
+            pastelProjection.SetInteractionHands(handPositionBuffer, interactionCount);
+        }
+
+        if (ribbonProjection != null)
+        {
+            ApplyRibbonProjectionProperties();
+            ribbonProjection.SetInteractionHands(handPositionBuffer, interactionCount);
+        }
 
         bool canRepeatBurst = repeatRippleWhileTouching > 0f && Time.time - lastRippleTime >= repeatRippleWhileTouching;
 
@@ -193,14 +232,20 @@ public class ActivateProjector : MonoBehaviour
         {
             for (int i = 0; i < handCount; i++)
             {
-                pastelProjection.TriggerRipple(handPositionBuffer[i]);
+                if (pastelProjection != null)
+                {
+                    pastelProjection.TriggerRipple(handPositionBuffer[i]);
+                }
             }
 
             lastRippleTime = Time.time;
         }
         else if (isTouching && !wasTouching)
         {
-            pastelProjection.TriggerRipple();
+            if (pastelProjection != null)
+            {
+                pastelProjection.TriggerRipple();
+            }
             lastRippleTime = Time.time;
         }
 
@@ -296,6 +341,77 @@ public class ActivateProjector : MonoBehaviour
         pastelProjection.inkBurstSize = inkBurstSize;
         pastelProjection.cameraHeight = cameraHeight;
         pastelProjection.projectionHeight = projectionHeight;
+    }
+
+    private void SetupRibbonProjection()
+    {
+        Camera targetCamera = projectorCamera != null ? projectorCamera : FindProjectorCamera();
+
+        if (targetCamera == null)
+        {
+            Debug.LogWarning("[ActivateProjector] Could not find a camera assigned to Display 2, so the soft ribbon projection was not created.");
+            return;
+        }
+
+        targetCamera.targetDisplay = projectorDisplayIndex;
+        targetCamera.orthographic = true;
+        targetCamera.clearFlags = CameraClearFlags.SolidColor;
+        targetCamera.backgroundColor = Color.black;
+
+        GameObject ribbonObject = GameObject.Find("Display 2 Soft Ribbon Projection");
+        if (ribbonObject == null)
+        {
+            ribbonObject = new GameObject("Display 2 Soft Ribbon Projection");
+        }
+
+        int projectionLayer = LayerMask.NameToLayer("ProjectionContent");
+        if (projectionLayer >= 0)
+        {
+            ribbonObject.layer = projectionLayer;
+            targetCamera.cullingMask = 1 << projectionLayer;
+        }
+
+        ribbonProjection = ribbonObject.GetComponent<Display2RibbonTrailController>();
+        if (ribbonProjection == null)
+        {
+            ribbonProjection = ribbonObject.AddComponent<Display2RibbonTrailController>();
+        }
+
+        ribbonProjection.targetCamera = targetCamera;
+        ApplyRibbonProjectionProperties();
+    }
+
+    private void ApplyRibbonProjectionProperties()
+    {
+        if (ribbonProjection == null)
+        {
+            return;
+        }
+
+        ribbonProjection.targetCamera = projectorCamera != null ? projectorCamera : FindProjectorCamera();
+        ribbonProjection.rainbowMode = rainbowMode;
+        ribbonProjection.cameraHeight = cameraHeight;
+        ribbonProjection.projectionHeight = projectionHeight + 0.02f;
+        ribbonProjection.ribbonScale = ribbonScale;
+        ribbonProjection.glowIntensity = ribbonGlowIntensity;
+        ribbonProjection.followLagSeconds = ribbonFollowLagSeconds;
+        ribbonProjection.fadeSeconds = ribbonFadeSeconds;
+        ribbonProjection.enableMistParticles = enableMistParticles;
+        ribbonProjection.mistAmount = mistAmount;
+        ribbonProjection.mistSize = mistSize;
+        ribbonProjection.mistLifetime = mistLifetime;
+        ribbonProjection.mistSpeed = mistSpeed;
+        ribbonProjection.mistSpread = mistSpread;
+        ribbonProjection.mistDrift = mistDrift;
+        ribbonProjection.mistNoiseStrength = mistNoiseStrength;
+        ribbonProjection.mistOpacity = mistOpacity;
+        ribbonProjection.mistTint = mistTint;
+        ribbonProjection.enableShakeWaveBurst = enableShakeWaveBurst;
+        ribbonProjection.shakeWaveResourcePath = shakeWaveResourcePath;
+        ribbonProjection.shakeWaveScale = shakeWaveScale;
+        ribbonProjection.shakeWaveLifetime = shakeWaveLifetime;
+        ribbonProjection.shakeWaveBrightness = shakeWaveBrightness;
+        ribbonProjection.shakeWaveColor = shakeWaveColor;
     }
 
     private void SetupExternalCameraDebugBackground()

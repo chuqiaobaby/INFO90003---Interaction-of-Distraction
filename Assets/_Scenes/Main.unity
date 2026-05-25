@@ -721,7 +721,28 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ActivateProjector
   projectorDisplayIndex: 1
   projectorCamera: {fileID: 1592376375}
-  createPastelProjection: 1
+  createRibbonProjection: 1
+  ribbonScale: 1
+  ribbonGlowIntensity: 1.6
+  ribbonFollowLagSeconds: 0.18
+  ribbonFadeSeconds: 1.65
+  enableMistParticles: 1
+  mistAmount: 34
+  mistSize: 0.48
+  mistLifetime: 1.75
+  mistSpeed: 0.24
+  mistSpread: 0.34
+  mistDrift: 0.55
+  mistNoiseStrength: 0.72
+  mistOpacity: 0.34
+  mistTint: {r: 0.1, g: 1, b: 0.6, a: 1}
+  enableShakeWaveBurst: 1
+  shakeWaveResourcePath: ShakeWaveI/Prefebs/shake_wave_1
+  shakeWaveScale: 1.35
+  shakeWaveLifetime: 2.8
+  shakeWaveBrightness: 1.35
+  shakeWaveColor: {r: 0.16, g: 1, b: 0.42, a: 1}
+  createPastelProjection: 0
   manualTriggerKey: 32
   backgroundColor: {r: 0, g: 0, b: 0, a: 0}
   strokeOpacity: 0.68
@@ -740,11 +761,15 @@ MonoBehaviour:
   cursorVelocityLagSeconds: 0.12
   trailSubsampleDistance: 0.014
   inkPalette:
-  - {r: 0.08, g: 1, b: 0.45, a: 1}
-  - {r: 0.36, g: 1, b: 0.08, a: 1}
-  - {r: 0.95, g: 0.95, b: 0.05, a: 1}
-  - {r: 0, g: 0.92, b: 1, a: 1}
-  - {r: 1, g: 0.42, b: 0.18, a: 1}
+  - {r: 0.019607844, g: 0.03137255, b: 0.08627451, a: 1}
+  - {r: 0.039215688, g: 0.11764706, b: 0.22745098, a: 1}
+  - {r: 0, g: 0.4, b: 1, a: 1}
+  - {r: 0, g: 0.68235296, b: 0.9372549, a: 1}
+  - {r: 0.47843137, g: 0.36078432, b: 1, a: 1}
+  - {r: 0.78431374, g: 0.41960785, b: 1, a: 1}
+  - {r: 1, g: 0.56078434, b: 0.9372549, a: 1}
+  - {r: 1, g: 0.8392157, b: 1, a: 1}
+  - {r: 1, g: 1, b: 1, a: 1}
   inkColorCycleSeconds: 2
   inkFadeSeconds: 1.42
   inkSplatForce: 0.72
@@ -771,8 +796,8 @@ MonoBehaviour:
   mediaPipeCameraDeviceIndex: -1
   mediaPipeExternalCameraOrdinal: 0
   useHandTrackingPosition: 1
-  useMediaPipeHandTracking: 0
-  mediaPipeHandVisibleTriggersRipple: 0
+  useMediaPipeHandTracking: 1
+  mediaPipeHandVisibleTriggersRipple: 1
   useMousePositionWhenHandMissing: 1
   repeatRippleWhileTouching: 0
   handTrackingRotatePosition180: 0
