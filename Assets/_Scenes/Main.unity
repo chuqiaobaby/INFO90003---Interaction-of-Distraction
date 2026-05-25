@@ -721,29 +721,73 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ActivateProjector
   projectorDisplayIndex: 1
   projectorCamera: {fileID: 1592376375}
+  rainbowMode: 0
+  manualTriggerKey: 32
+  cameraHeight: 5
+  projectionHeight: 0
   createRibbonProjection: 1
-  ribbonScale: 1
-  ribbonGlowIntensity: 1.6
+  enableParticleRibbon: 1
+  enableTrailRendererRibbon: 0
+  ribbonScale: 0.42
+  ribbonGlowIntensity: 1.63
   ribbonFollowLagSeconds: 0.18
-  ribbonFadeSeconds: 1.65
+  particleRibbonMaxParticles: 2838
+  particleRibbonAmount: 1050
+  particleRibbonSize: 0.141
+  particleRibbonLifetime: 1.85
+  particleRibbonForce: 1.15
+  particleRibbonBackflow: 0.82
+  particleRibbonSpread: 0.34
+  particleRibbonNoise: 0.95
+  particleRibbonHeadBrightness: 2.1
+  particleRibbonTailOpacity: 0.057
+  enableRibbonColorCycle: 1
+  ribbonColorCycleSeconds: 3
+  ribbonColorCyclePalette:
+  - {r: 0.98, g: 0.39, b: 0.92, a: 1}
+  - {r: 0.66, g: 0.36, b: 1, a: 1}
+  - {r: 0.36, g: 0.62, b: 1, a: 1}
+  - {r: 1, g: 0.72, b: 0.96, a: 1}
+  - {r: 0.52, g: 0.22, b: 0.92, a: 1}
+  ribbonFadeSeconds: 1.12
+  ribbonHeadSize: 1.36
+  ribbonHeadBulge: 0.93
+  ribbonHeadSoftness: 0.55
+  ribbonSpeedStretch: 0.65
+  ribbonForce: 1.59
+  ribbonHeadBrightness: 1.93
+  ribbonTailBrightness: 0.254
+  ribbonTailAlpha: 0.143
+  ribbonColorVariation: 0.818
   enableMistParticles: 1
-  mistAmount: 34
-  mistSize: 0.48
-  mistLifetime: 1.75
-  mistSpeed: 0.24
-  mistSpread: 0.34
-  mistDrift: 0.55
-  mistNoiseStrength: 0.72
-  mistOpacity: 0.34
-  mistTint: {r: 0.1, g: 1, b: 0.6, a: 1}
+  mistMaxParticles: 2000
+  mistAmount: 1149
+  mistSize: 0.12
+  mistLifetime: 1.48
+  mistSpeed: 0.14
+  mistSpread: 0.62
+  mistDrift: 0.32
+  mistNoiseStrength: 0.95
+  mistOpacity: 0.53
+  mistTint: {r: 0, g: 0.4, b: 1, a: 1}
+  mistCoreRadius: 0.231
+  mistHaloRadius: 0.165
+  mistSdfSoftness: 0.183
+  mistCorePower: 1.4
+  mistHaloPower: 1.16
+  mistEmissionPower: 1.26
+  mistFbmScale: 4.2
+  mistFbmFlowSpeed: 0.18
+  mistAlphaPower: 2.31
+  mistFlowColorA: {r: 0.78431374, g: 0.41960785, b: 1, a: 1}
+  mistFlowColorB: {r: 1, g: 0.56078434, b: 0.9372549, a: 1}
   enableShakeWaveBurst: 1
   shakeWaveResourcePath: ShakeWaveI/Prefebs/shake_wave_1
-  shakeWaveScale: 1.35
+  shakeWaveScale: 3.49
   shakeWaveLifetime: 2.8
-  shakeWaveBrightness: 1.35
-  shakeWaveColor: {r: 0.16, g: 1, b: 0.42, a: 1}
+  shakeWaveBrightness: 1.81
+  shakeWaveColor: {r: 0.78431374, g: 0.41960785, b: 1, a: 1}
   createPastelProjection: 0
-  manualTriggerKey: 32
   backgroundColor: {r: 0, g: 0, b: 0, a: 0}
   strokeOpacity: 0.68
   rippleDuration: 2.15
@@ -756,8 +800,7 @@ MonoBehaviour:
   particleDensity: 1.75
   interactionRadius: 0.58
   continuousTrailStrength: 0.8
-  rainbowMode: 1
-  cursorLagSeconds: 0.16
+  cursorLagSeconds: 0.126
   cursorVelocityLagSeconds: 0.12
   trailSubsampleDistance: 0.014
   inkPalette:
@@ -786,8 +829,6 @@ MonoBehaviour:
   inkTrailStretch: 3.45
   inkWhiteCore: 0.3
   inkBurstSize: 1.22
-  cameraHeight: 5
-  projectionHeight: 0
   showExternalCameraAsBackground: 0
   debugBackgroundFlipX: 0
   debugBackgroundFlipY: 0
@@ -1049,7 +1090,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.631294, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.648895, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1110,7 +1151,7 @@ MonoBehaviour:
     m_Bits: 1
   m_VolumeTrigger: {fileID: 0}
   m_VolumeFrameworkUpdateModeOption: 2
-  m_RenderPostProcessing: 0
+  m_RenderPostProcessing: 1
   m_Antialiasing: 0
   m_AntialiasingQuality: 2
   m_StopNaN: 0
@@ -1314,7 +1355,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.631294, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.648895, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}

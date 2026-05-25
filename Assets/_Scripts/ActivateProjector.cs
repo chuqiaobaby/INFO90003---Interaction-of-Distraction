@@ -5,52 +5,97 @@ public class ActivateProjector : MonoBehaviour
     [Header("Display 2")]
     [SerializeField] private int projectorDisplayIndex = 1;
     [SerializeField] private Camera projectorCamera;
+    [SerializeField] private bool rainbowMode;
+    [SerializeField] private KeyCode manualTriggerKey = KeyCode.Space;
+    [SerializeField] private float cameraHeight = 5f;
+    [SerializeField] private float projectionHeight = 0f;
 
-    [Header("Display 2 Soft Ribbon Projection")]
+    [Header("Display 2 Particle Ribbon")]
     [SerializeField] private bool createRibbonProjection = true;
+    [SerializeField] private bool enableParticleRibbon = true;
+    [SerializeField] private bool enableTrailRendererRibbon;
     [SerializeField, Range(0.2f, 2.5f)] private float ribbonScale = 1f;
     [SerializeField, Range(0.5f, 4f)] private float ribbonGlowIntensity = 1.6f;
     [SerializeField, Range(0.08f, 0.6f)] private float ribbonFollowLagSeconds = 0.18f;
-    [SerializeField, Range(0.4f, 3.5f)] private float ribbonFadeSeconds = 1.65f;
+    [SerializeField, Range(256, 6000)] private int particleRibbonMaxParticles = 2200;
+    [SerializeField, Range(0f, 2600f)] private float particleRibbonAmount = 1050f;
+    [SerializeField, Range(0.035f, 0.75f)] private float particleRibbonSize = 0.18f;
+    [SerializeField, Range(0.35f, 4f)] private float particleRibbonLifetime = 1.85f;
+    [SerializeField, Range(0f, 4f)] private float particleRibbonForce = 1.15f;
+    [SerializeField, Range(0f, 3f)] private float particleRibbonBackflow = 0.82f;
+    [SerializeField, Range(0.02f, 2.6f)] private float particleRibbonSpread = 0.34f;
+    [SerializeField, Range(0f, 3f)] private float particleRibbonNoise = 0.95f;
+    [SerializeField, Range(0.4f, 5f)] private float particleRibbonHeadBrightness = 2.1f;
+    [SerializeField, Range(0f, 0.45f)] private float particleRibbonTailOpacity = 0.035f;
+    [SerializeField] private bool enableRibbonColorCycle = true;
+    [SerializeField, Min(0.1f)] private float ribbonColorCycleSeconds = 3f;
+    [SerializeField] private Color[] ribbonColorCyclePalette =
+    {
+        new Color(0.98f, 0.39f, 0.92f, 1f),
+        new Color(0.66f, 0.36f, 1.00f, 1f),
+        new Color(0.36f, 0.62f, 1.00f, 1f),
+        new Color(1.00f, 0.72f, 0.96f, 1f),
+        new Color(0.52f, 0.22f, 0.92f, 1f)
+    };
+    [SerializeField, HideInInspector] private float ribbonFadeSeconds = 1.65f;
+    [SerializeField, HideInInspector] private float ribbonHeadSize = 1.55f;
+    [SerializeField, HideInInspector] private float ribbonHeadBulge = 0.85f;
+    [SerializeField, HideInInspector] private float ribbonHeadSoftness = 0.55f;
+    [SerializeField, HideInInspector] private float ribbonSpeedStretch = 0.65f;
+    [SerializeField, HideInInspector] private float ribbonForce = 0.55f;
+    [SerializeField, HideInInspector] private float ribbonHeadBrightness = 1.35f;
+    [SerializeField, HideInInspector] private float ribbonTailBrightness = 0.32f;
+    [SerializeField, HideInInspector] private float ribbonTailAlpha = 0.04f;
+    [SerializeField, HideInInspector] private float ribbonColorVariation = 0.45f;
+    [Header("Display 2 Mist / Light Curtain")]
     [SerializeField] private bool enableMistParticles = true;
-    [SerializeField, Range(0f, 120f)] private float mistAmount = 34f;
-    [SerializeField, Range(0.05f, 1.4f)] private float mistSize = 0.48f;
-    [SerializeField, Range(0.2f, 4f)] private float mistLifetime = 1.75f;
-    [SerializeField, Range(0f, 2f)] private float mistSpeed = 0.24f;
-    [SerializeField, Range(0.02f, 1.2f)] private float mistSpread = 0.34f;
-    [SerializeField, Range(0f, 2f)] private float mistDrift = 0.55f;
-    [SerializeField, Range(0f, 2f)] private float mistNoiseStrength = 0.72f;
-    [SerializeField, Range(0f, 1f)] private float mistOpacity = 0.34f;
+    [SerializeField, Range(128, 5000)] private int mistMaxParticles = 2000;
+    [SerializeField, Range(0f, 2500f)] private float mistAmount = 720f;
+    [SerializeField, Range(0.015f, 0.6f)] private float mistSize = 0.12f;
+    [SerializeField, Range(0.2f, 6f)] private float mistLifetime = 2.75f;
+    [SerializeField, Range(0f, 2f)] private float mistSpeed = 0.14f;
+    [SerializeField, Range(0.02f, 2.4f)] private float mistSpread = 0.62f;
+    [SerializeField, Range(0f, 2f)] private float mistDrift = 0.32f;
+    [SerializeField, Range(0f, 3f)] private float mistNoiseStrength = 0.95f;
+    [SerializeField, Range(0f, 1f)] private float mistOpacity = 0.075f;
     [SerializeField] private Color mistTint = new Color(0.10f, 1.00f, 0.60f, 1f);
+    [Header("Display 2 SDF/FBM Mist Material")]
+    [SerializeField, Range(0.02f, 0.8f)] private float mistCoreRadius = 0.18f;
+    [SerializeField, Range(0.1f, 2f)] private float mistHaloRadius = 0.95f;
+    [SerializeField, Range(0.01f, 1f)] private float mistSdfSoftness = 0.34f;
+    [SerializeField, Range(0f, 8f)] private float mistCorePower = 2.7f;
+    [SerializeField, Range(0f, 8f)] private float mistHaloPower = 1.45f;
+    [SerializeField, Range(0f, 10f)] private float mistEmissionPower = 2.8f;
+    [SerializeField, Range(0.2f, 16f)] private float mistFbmScale = 4.2f;
+    [SerializeField, Range(0f, 3f)] private float mistFbmFlowSpeed = 0.18f;
+    [SerializeField, Range(0.2f, 4f)] private float mistAlphaPower = 1.15f;
+    [SerializeField] private Color mistFlowColorA = new Color(0.08f, 1.00f, 0.55f, 1f);
+    [SerializeField] private Color mistFlowColorB = new Color(0.22f, 0.84f, 1.00f, 1f);
+    [Header("Display 2 Shake Wave Burst")]
     [SerializeField] private bool enableShakeWaveBurst = true;
-    [SerializeField] private string shakeWaveResourcePath = "ShakeWaveI/Prefebs/shake_wave_1";
+    [SerializeField, HideInInspector] private string shakeWaveResourcePath = "ShakeWaveI/Prefebs/shake_wave_1";
     [SerializeField, Range(0.2f, 4f)] private float shakeWaveScale = 1.35f;
     [SerializeField, Range(0.2f, 6f)] private float shakeWaveLifetime = 2.8f;
     [SerializeField, Range(0f, 3f)] private float shakeWaveBrightness = 1.35f;
     [SerializeField] private Color shakeWaveColor = new Color(0.16f, 1.00f, 0.42f, 1f);
 
-    [Header("Display 2 Cinematic Particle Projection")]
-    [SerializeField] private bool createPastelProjection = false;
-    [SerializeField] private KeyCode manualTriggerKey = KeyCode.Space;
-    [SerializeField] private Color backgroundColor = new Color(0f, 0f, 0f, 0f);
-    [SerializeField, Range(0f, 3f)] private float strokeOpacity = 2.2f;
-    [SerializeField, Range(0.2f, 5f)] private float rippleDuration = 2.8f;
-    [SerializeField, Range(0.1f, 2.2f)] private float maxRippleRadius = 1.25f;
-    [SerializeField, Range(0f, 1f)] private float grainStrength = 0.18f;
-    [SerializeField, Range(0f, 4f)] private float flowSpeed = 0.72f;
-    [SerializeField, Range(0.2f, 4f)] private float trailLength = 3.0f;
-    [SerializeField, Range(0f, 12f)] private float bloomBoost = 6.5f;
-    [SerializeField, Range(0f, 4f)] private float handInfluence = 1.6f;
-    [SerializeField, Range(0.4f, 3f)] private float particleDensity = 1.95f;
-    [SerializeField, Range(0.25f, 1.5f)] private float interactionRadius = 0.62f;
-    [SerializeField, Range(0f, 4f)] private float continuousTrailStrength = 0.8f;
-    [Header("Display 2 Ribbon Cursor Feel")]
-    [SerializeField] private bool rainbowMode;
-    [SerializeField, Range(0.02f, 0.35f)] private float cursorLagSeconds = 0.16f;
-    [SerializeField, Range(0.02f, 0.35f)] private float cursorVelocityLagSeconds = 0.12f;
-    [SerializeField, Range(0f, 0.08f)] private float trailSubsampleDistance = 0.016f;
-    [Header("Display 2 Touch Ink")]
-    [SerializeField] private Color[] inkPalette =
+    [SerializeField, HideInInspector] private bool createPastelProjection = false;
+    [SerializeField, HideInInspector] private Color backgroundColor = new Color(0f, 0f, 0f, 0f);
+    [SerializeField, HideInInspector] private float strokeOpacity = 2.2f;
+    [SerializeField, HideInInspector] private float rippleDuration = 2.8f;
+    [SerializeField, HideInInspector] private float maxRippleRadius = 1.25f;
+    [SerializeField, HideInInspector] private float grainStrength = 0.18f;
+    [SerializeField, HideInInspector] private float flowSpeed = 0.72f;
+    [SerializeField, HideInInspector] private float trailLength = 3.0f;
+    [SerializeField, HideInInspector] private float bloomBoost = 6.5f;
+    [SerializeField, HideInInspector] private float handInfluence = 1.6f;
+    [SerializeField, HideInInspector] private float particleDensity = 1.95f;
+    [SerializeField, HideInInspector] private float interactionRadius = 0.62f;
+    [SerializeField, HideInInspector] private float continuousTrailStrength = 0.8f;
+    [SerializeField, HideInInspector] private float cursorLagSeconds = 0.16f;
+    [SerializeField, HideInInspector] private float cursorVelocityLagSeconds = 0.12f;
+    [SerializeField, HideInInspector] private float trailSubsampleDistance = 0.016f;
+    [SerializeField, HideInInspector] private Color[] inkPalette =
     {
         new Color(0.08f, 1.00f, 0.45f, 1f),
         new Color(0.36f, 1.00f, 0.08f, 1f),
@@ -58,29 +103,26 @@ public class ActivateProjector : MonoBehaviour
         new Color(0.00f, 0.92f, 1.00f, 1f),
         new Color(1.00f, 0.42f, 0.18f, 1f)
     };
-    [SerializeField, Min(0.1f)] private float inkColorCycleSeconds = 2f;
-    [SerializeField, Range(0.5f, 4f)] private float inkFadeSeconds = 2f;
-    [SerializeField, Range(0f, 4f)] private float inkSplatForce = 1.65f;
-    [SerializeField, Range(-4f, 4f)] private float inkAngularVelocityMin = -1.15f;
-    [SerializeField, Range(-4f, 4f)] private float inkAngularVelocityMax = 1.45f;
-    [SerializeField, Range(0f, 1.5f)] private float inkRadiusDrift = 0.42f;
-    [SerializeField, Range(0f, 2f)] private float inkSpeedDrift = 0.35f;
-    [SerializeField, Range(0f, 3f)] private float inkChaos = 0.8f;
-    [SerializeField, Range(0f, 3f)] private float inkDiffusion = 0.45f;
-    [SerializeField, Range(0.2f, 4f)] private float inkBrightness = 1.55f;
-    [SerializeField, Range(0.2f, 4f)] private float inkSoftness = 1.7f;
-    [SerializeField, Range(0f, 3f)] private float inkNoiseStrength = 0.7f;
-    [SerializeField, Range(0.5f, 12f)] private float inkNoiseScale = 4.8f;
-    [SerializeField, Range(0.2f, 5f)] private float inkTrailStretch = 2.7f;
-    [SerializeField, Range(0f, 2f)] private float inkWhiteCore = 0.42f;
-    [SerializeField, Range(0.3f, 3f)] private float inkBurstSize = 1.15f;
-    [SerializeField] private float cameraHeight = 5f;
-    [SerializeField] private float projectionHeight = 0f;
+    [SerializeField, HideInInspector] private float inkColorCycleSeconds = 2f;
+    [SerializeField, HideInInspector] private float inkFadeSeconds = 2f;
+    [SerializeField, HideInInspector] private float inkSplatForce = 1.65f;
+    [SerializeField, HideInInspector] private float inkAngularVelocityMin = -1.15f;
+    [SerializeField, HideInInspector] private float inkAngularVelocityMax = 1.45f;
+    [SerializeField, HideInInspector] private float inkRadiusDrift = 0.42f;
+    [SerializeField, HideInInspector] private float inkSpeedDrift = 0.35f;
+    [SerializeField, HideInInspector] private float inkChaos = 0.8f;
+    [SerializeField, HideInInspector] private float inkDiffusion = 0.45f;
+    [SerializeField, HideInInspector] private float inkBrightness = 1.55f;
+    [SerializeField, HideInInspector] private float inkSoftness = 1.7f;
+    [SerializeField, HideInInspector] private float inkNoiseStrength = 0.7f;
+    [SerializeField, HideInInspector] private float inkNoiseScale = 4.8f;
+    [SerializeField, HideInInspector] private float inkTrailStretch = 2.7f;
+    [SerializeField, HideInInspector] private float inkWhiteCore = 0.42f;
+    [SerializeField, HideInInspector] private float inkBurstSize = 1.15f;
 
-    [Header("Display 2 Debug Background")]
-    [SerializeField] private bool showExternalCameraAsBackground = false;
-    [SerializeField] private bool debugBackgroundFlipX;
-    [SerializeField] private bool debugBackgroundFlipY;
+    [SerializeField, HideInInspector] private bool showExternalCameraAsBackground = false;
+    [SerializeField, HideInInspector] private bool debugBackgroundFlipX;
+    [SerializeField, HideInInspector] private bool debugBackgroundFlipY;
 
     [Header("Display 2 Camera")]
     [Tooltip("Camera name substring for Display 2 MediaPipe tracking. Leave empty to use automatic external camera selection.")]
@@ -110,6 +152,14 @@ public class ActivateProjector : MonoBehaviour
     private bool wasTouching;
     private float lastRippleTime = -1000f;
     private readonly Vector2[] handPositionBuffer = new Vector2[4];
+
+    private void OnValidate()
+    {
+        if (Application.isPlaying && ribbonProjection != null)
+        {
+            ApplyRibbonProjectionProperties();
+        }
+    }
 
     private void Start()
     {
@@ -193,7 +243,8 @@ public class ActivateProjector : MonoBehaviour
             isTouching = true;
         }
 
-        bool manualTrigger = Application.isEditor && Input.GetKey(manualTriggerKey);
+        bool hardwareInputActive = input != null && input.useHardwareInput;
+        bool manualTrigger = Application.isEditor && !hardwareInputActive && Input.GetKey(manualTriggerKey);
         if (manualTrigger)
         {
             isTouching = true;
@@ -396,7 +447,32 @@ public class ActivateProjector : MonoBehaviour
         ribbonProjection.glowIntensity = ribbonGlowIntensity;
         ribbonProjection.followLagSeconds = ribbonFollowLagSeconds;
         ribbonProjection.fadeSeconds = ribbonFadeSeconds;
+        ribbonProjection.enableParticleRibbon = enableParticleRibbon;
+        ribbonProjection.enableTrailRendererRibbon = enableTrailRendererRibbon;
+        ribbonProjection.particleRibbonMaxParticles = particleRibbonMaxParticles;
+        ribbonProjection.particleRibbonAmount = particleRibbonAmount;
+        ribbonProjection.particleRibbonSize = particleRibbonSize;
+        ribbonProjection.particleRibbonLifetime = particleRibbonLifetime;
+        ribbonProjection.particleRibbonForce = particleRibbonForce;
+        ribbonProjection.particleRibbonBackflow = particleRibbonBackflow;
+        ribbonProjection.particleRibbonSpread = particleRibbonSpread;
+        ribbonProjection.particleRibbonNoise = particleRibbonNoise;
+        ribbonProjection.particleRibbonHeadBrightness = particleRibbonHeadBrightness;
+        ribbonProjection.particleRibbonTailOpacity = particleRibbonTailOpacity;
+        ribbonProjection.enableRibbonColorCycle = enableRibbonColorCycle;
+        ribbonProjection.ribbonColorCycleSeconds = ribbonColorCycleSeconds;
+        ribbonProjection.ribbonColorCyclePalette = ribbonColorCyclePalette;
+        ribbonProjection.ribbonHeadSize = ribbonHeadSize;
+        ribbonProjection.ribbonHeadBulge = ribbonHeadBulge;
+        ribbonProjection.ribbonHeadSoftness = ribbonHeadSoftness;
+        ribbonProjection.ribbonSpeedStretch = ribbonSpeedStretch;
+        ribbonProjection.ribbonForce = ribbonForce;
+        ribbonProjection.ribbonHeadBrightness = ribbonHeadBrightness;
+        ribbonProjection.ribbonTailBrightness = ribbonTailBrightness;
+        ribbonProjection.ribbonTailAlpha = ribbonTailAlpha;
+        ribbonProjection.ribbonColorVariation = ribbonColorVariation;
         ribbonProjection.enableMistParticles = enableMistParticles;
+        ribbonProjection.mistMaxParticles = mistMaxParticles;
         ribbonProjection.mistAmount = mistAmount;
         ribbonProjection.mistSize = mistSize;
         ribbonProjection.mistLifetime = mistLifetime;
@@ -406,12 +482,24 @@ public class ActivateProjector : MonoBehaviour
         ribbonProjection.mistNoiseStrength = mistNoiseStrength;
         ribbonProjection.mistOpacity = mistOpacity;
         ribbonProjection.mistTint = mistTint;
+        ribbonProjection.mistCoreRadius = mistCoreRadius;
+        ribbonProjection.mistHaloRadius = mistHaloRadius;
+        ribbonProjection.mistSdfSoftness = mistSdfSoftness;
+        ribbonProjection.mistCorePower = mistCorePower;
+        ribbonProjection.mistHaloPower = mistHaloPower;
+        ribbonProjection.mistEmissionPower = mistEmissionPower;
+        ribbonProjection.mistFbmScale = mistFbmScale;
+        ribbonProjection.mistFbmFlowSpeed = mistFbmFlowSpeed;
+        ribbonProjection.mistAlphaPower = mistAlphaPower;
+        ribbonProjection.mistFlowColorA = mistFlowColorA;
+        ribbonProjection.mistFlowColorB = mistFlowColorB;
         ribbonProjection.enableShakeWaveBurst = enableShakeWaveBurst;
         ribbonProjection.shakeWaveResourcePath = shakeWaveResourcePath;
         ribbonProjection.shakeWaveScale = shakeWaveScale;
         ribbonProjection.shakeWaveLifetime = shakeWaveLifetime;
         ribbonProjection.shakeWaveBrightness = shakeWaveBrightness;
         ribbonProjection.shakeWaveColor = shakeWaveColor;
+
     }
 
     private void SetupExternalCameraDebugBackground()
