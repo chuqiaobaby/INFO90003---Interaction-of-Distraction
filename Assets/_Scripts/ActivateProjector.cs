@@ -125,9 +125,11 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField, HideInInspector] private float inkWhiteCore = 0.42f;
     [SerializeField, HideInInspector] private float inkBurstSize = 1.15f;
 
-    [SerializeField, HideInInspector] private bool showExternalCameraAsBackground = false;
-    [SerializeField, HideInInspector] private bool debugBackgroundFlipX;
-    [SerializeField, HideInInspector] private bool debugBackgroundFlipY;
+    [Header("Display 2 Camera Background")]
+    [Tooltip("Show the Display 2 tracking camera feed as a background on the projector output for alignment/debugging.")]
+    [SerializeField] private bool showExternalCameraAsBackground;
+    [SerializeField] private bool debugBackgroundFlipX;
+    [SerializeField] private bool debugBackgroundFlipY;
 
     [Header("Display 2 Camera")]
     [Tooltip("Camera name substring for Display 2 MediaPipe tracking. Leave empty to use automatic external camera selection.")]
@@ -161,6 +163,7 @@ public class ActivateProjector : MonoBehaviour
     private void OnValidate()
     {
         ApplyProjectorViewport();
+        ApplyExternalCameraDebugBackgroundVisibility();
 
         if (Application.isPlaying && ribbonProjection != null)
         {
@@ -207,6 +210,10 @@ public class ActivateProjector : MonoBehaviour
         if (showExternalCameraAsBackground)
         {
             SetupExternalCameraDebugBackground();
+        }
+        else
+        {
+            ApplyExternalCameraDebugBackgroundVisibility();
         }
 
         handTracking = HandTrackingUdpReceiver.Instance;
@@ -560,6 +567,35 @@ public class ActivateProjector : MonoBehaviour
         debugBackground.matchHandTrackerOrientation = true;
         debugBackground.flipX = debugBackgroundFlipX;
         debugBackground.flipY = debugBackgroundFlipY;
+    }
+
+    private void ApplyExternalCameraDebugBackgroundVisibility()
+    {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        if (showExternalCameraAsBackground)
+        {
+            SetupExternalCameraDebugBackground();
+            if (debugBackground != null)
+            {
+                debugBackground.gameObject.SetActive(true);
+            }
+            return;
+        }
+
+        if (debugBackground == null)
+        {
+            GameObject backgroundObject = GameObject.Find("Display 2 Camera Debug Background");
+            debugBackground = backgroundObject != null ? backgroundObject.GetComponent<Display2CameraDebugBackground>() : null;
+        }
+
+        if (debugBackground != null)
+        {
+            debugBackground.gameObject.SetActive(false);
+        }
     }
 
     private Camera FindProjectorCamera()
