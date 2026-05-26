@@ -10,6 +10,11 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField] private float cameraHeight = 5f;
     [SerializeField] private float projectionHeight = 0f;
 
+    [Header("Display 2 Output Calibration")]
+    [SerializeField, Range(0.1f, 1f)] private float projectorViewportScale = 1f;
+    [SerializeField, Range(-0.5f, 0.5f)] private float projectorViewportOffsetX;
+    [SerializeField, Range(-0.5f, 0.5f)] private float projectorViewportOffsetY;
+
     [Header("Display 2 Particle Ribbon")]
     [SerializeField] private bool createRibbonProjection = true;
     [SerializeField] private bool enableParticleRibbon = true;
@@ -155,6 +160,8 @@ public class ActivateProjector : MonoBehaviour
 
     private void OnValidate()
     {
+        ApplyProjectorViewport();
+
         if (Application.isPlaying && ribbonProjection != null)
         {
             ApplyRibbonProjectionProperties();
@@ -164,6 +171,7 @@ public class ActivateProjector : MonoBehaviour
     private void Start()
     {
         ActivateDisplay(projectorDisplayIndex);
+        ApplyProjectorViewport();
 
         if (createPastelProjection)
         {
@@ -322,6 +330,21 @@ public class ActivateProjector : MonoBehaviour
         Debug.Log($"[ActivateProjector] Activated Display {displayIndex + 1}.");
     }
 
+    private void ApplyProjectorViewport()
+    {
+        Camera targetCamera = projectorCamera != null ? projectorCamera : FindProjectorCamera();
+        if (targetCamera == null)
+        {
+            return;
+        }
+
+        float scale = Mathf.Clamp(projectorViewportScale, 0.1f, 1f);
+        float viewportX = 0.5f - scale * 0.5f + projectorViewportOffsetX;
+        float viewportY = 0.5f - scale * 0.5f + projectorViewportOffsetY;
+
+        targetCamera.rect = new Rect(viewportX, viewportY, scale, scale);
+    }
+
     private void SetupPastelProjection()
     {
         Camera targetCamera = projectorCamera != null ? projectorCamera : FindProjectorCamera();
@@ -336,6 +359,7 @@ public class ActivateProjector : MonoBehaviour
         targetCamera.orthographic = true;
         targetCamera.clearFlags = CameraClearFlags.SolidColor;
         targetCamera.backgroundColor = new Color(0f, 0f, 0f, 0f);
+        ApplyProjectorViewport();
 
         GameObject projectionObject = GameObject.Find("Display 2 Pastel Projection");
         if (projectionObject == null)
@@ -408,6 +432,7 @@ public class ActivateProjector : MonoBehaviour
         targetCamera.orthographic = true;
         targetCamera.clearFlags = CameraClearFlags.SolidColor;
         targetCamera.backgroundColor = Color.black;
+        ApplyProjectorViewport();
 
         GameObject ribbonObject = GameObject.Find("Display 2 Soft Ribbon Projection");
         if (ribbonObject == null)

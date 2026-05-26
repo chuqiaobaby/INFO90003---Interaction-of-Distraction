@@ -725,6 +725,9 @@ MonoBehaviour:
   manualTriggerKey: 32
   cameraHeight: 5
   projectionHeight: 0
+  projectorViewportScale: 0.455
+  projectorViewportOffsetX: 0.006
+  projectorViewportOffsetY: 0.011
   createRibbonProjection: 1
   enableParticleRibbon: 1
   enableTrailRendererRibbon: 0
@@ -1090,7 +1093,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.648895, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.65361, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1207,10 +1210,10 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0
-    y: 0
-    width: 1
-    height: 1
+    x: 0.2785
+    y: 0.2835
+    width: 0.455
+    height: 0.455
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 60
@@ -1355,7 +1358,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.648895, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.65361, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
