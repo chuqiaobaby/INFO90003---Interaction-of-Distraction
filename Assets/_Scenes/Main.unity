@@ -723,27 +723,34 @@ MonoBehaviour:
   projectorCamera: {fileID: 1592376375}
   rainbowMode: 0
   manualTriggerKey: 32
+  manualTriggerHoldSeconds: 0.95
   cameraHeight: 5
   projectionHeight: 0
-  projectorViewportScale: 0.455
-  projectorViewportOffsetX: 0.006
-  projectorViewportOffsetY: 0.011
+  projectorViewportScale: 1
+  projectorViewportOffsetX: 0
+  projectorViewportOffsetY: 0
+  enableDisplay2EdgeFade: 1
+  display2EdgeFadeWidth: 0.309
+  display2EdgeFadeDarkness: 1
+  display2EdgeFadeSoftness: 0.85
+  display2EdgeFadeCornerBoost: 0.5
+  display2EdgeFadeDefaultsInitialized: 1
   createRibbonProjection: 1
   enableParticleRibbon: 1
   enableTrailRendererRibbon: 0
   ribbonScale: 0.42
   ribbonGlowIntensity: 1.63
-  ribbonFollowLagSeconds: 0.18
-  particleRibbonMaxParticles: 2838
+  ribbonFollowLagSeconds: 0.1
+  particleRibbonMaxParticles: 1250
   particleRibbonAmount: 1050
-  particleRibbonSize: 0.141
-  particleRibbonLifetime: 1.85
+  particleRibbonSize: 0.239
+  particleRibbonLifetime: 1.23
   particleRibbonForce: 1.15
   particleRibbonBackflow: 0.82
   particleRibbonSpread: 0.34
   particleRibbonNoise: 0.95
   particleRibbonHeadBrightness: 2.1
-  particleRibbonTailOpacity: 0.057
+  particleRibbonTailOpacity: 0.025
   enableRibbonColorCycle: 1
   ribbonColorCycleSeconds: 3
   ribbonColorCyclePalette:
@@ -841,8 +848,8 @@ MonoBehaviour:
   mediaPipeExternalCameraOrdinal: 0
   useHandTrackingPosition: 1
   useMediaPipeHandTracking: 1
-  mediaPipeHandVisibleTriggersRipple: 1
-  useMousePositionWhenHandMissing: 1
+  mediaPipeHandVisibleTriggersRipple: 0
+  useMousePositionWhenHandMissing: 0
   repeatRippleWhileTouching: 0
   handTrackingRotatePosition180: 0
   handTrackingFlipX: 0
@@ -1093,7 +1100,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.65361, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.64005, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1210,10 +1217,10 @@ Camera:
   m_LensShift: {x: 0, y: 0}
   m_NormalizedViewPortRect:
     serializedVersion: 2
-    x: 0.2785
-    y: 0.2835
-    width: 0.455
-    height: 0.455
+    x: 0
+    y: 0
+    width: 1
+    height: 1
   near clip plane: 0.3
   far clip plane: 1000
   field of view: 60
@@ -1358,7 +1365,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.65361, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.64005, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}

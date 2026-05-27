@@ -2,11 +2,19 @@ using UnityEngine;
 
 public class ActivateProjector : MonoBehaviour
 {
+    private static readonly int Display2FinalSoftMaskEnabledId = Shader.PropertyToID("_Display2FinalSoftMaskEnabled");
+    private static readonly int Display2FinalSoftMaskWidthId = Shader.PropertyToID("_Display2FinalSoftMaskWidth");
+    private static readonly int Display2FinalSoftMaskStrengthId = Shader.PropertyToID("_Display2FinalSoftMaskStrength");
+    private static readonly int Display2FinalSoftMaskSoftnessId = Shader.PropertyToID("_Display2FinalSoftMaskSoftness");
+    private static readonly int Display2FinalSoftMaskCornerBoostId = Shader.PropertyToID("_Display2FinalSoftMaskCornerBoost");
+    private static readonly int Display2FinalSoftMaskVignetteStrengthId = Shader.PropertyToID("_Display2FinalSoftMaskVignetteStrength");
+
     [Header("Display 2")]
     [SerializeField] private int projectorDisplayIndex = 1;
     [SerializeField] private Camera projectorCamera;
     [SerializeField] private bool rainbowMode;
     [SerializeField] private KeyCode manualTriggerKey = KeyCode.Space;
+    [SerializeField, Range(0.05f, 5f)] private float manualTriggerHoldSeconds = 1.5f;
     [SerializeField] private float cameraHeight = 5f;
     [SerializeField] private float projectionHeight = 0f;
 
@@ -14,6 +22,15 @@ public class ActivateProjector : MonoBehaviour
     [SerializeField, Range(0.1f, 1f)] private float projectorViewportScale = 1f;
     [SerializeField, Range(-0.5f, 0.5f)] private float projectorViewportOffsetX;
     [SerializeField, Range(-0.5f, 0.5f)] private float projectorViewportOffsetY;
+
+    [Header("Display 2 Edge Fade")]
+    [Tooltip("Makes Display 2 effects fade near the screen edge, with a light backup vignette to hide the hard projector rectangle.")]
+    [SerializeField] private bool enableDisplay2EdgeFade = true;
+    [SerializeField, Range(0.01f, 0.7f)] private float display2EdgeFadeWidth = 0.28f;
+    [SerializeField, Range(0f, 1f)] private float display2EdgeFadeDarkness = 0.85f;
+    [SerializeField, Range(0.25f, 4f)] private float display2EdgeFadeSoftness = 0.85f;
+    [SerializeField, Range(0f, 1f)] private float display2EdgeFadeCornerBoost = 0.45f;
+    [SerializeField, HideInInspector] private bool display2EdgeFadeDefaultsInitialized;
 
     [Header("Display 2 Particle Ribbon")]
     [SerializeField] private bool createRibbonProjection = true;
@@ -158,12 +175,20 @@ public class ActivateProjector : MonoBehaviour
     private HandTrackingUdpReceiver handTracking;
     private bool wasTouching;
     private float lastRippleTime = -1000f;
+    private float manualTriggerUntilTime = -1000f;
     private readonly Vector2[] handPositionBuffer = new Vector2[4];
 
     private void OnValidate()
     {
+        EnsureManualTriggerDefaults();
+        EnsureDisplay2EdgeFadeDefaults();
         ApplyProjectorViewport();
         ApplyExternalCameraDebugBackgroundVisibility();
+
+        if (Application.isPlaying)
+        {
+            ApplyDisplay2FinalSoftMask();
+        }
 
         if (Application.isPlaying && ribbonProjection != null)
         {
@@ -173,6 +198,8 @@ public class ActivateProjector : MonoBehaviour
 
     private void Start()
     {
+        EnsureManualTriggerDefaults();
+        EnsureDisplay2EdgeFadeDefaults();
         ActivateDisplay(projectorDisplayIndex);
         ApplyProjectorViewport();
 
@@ -185,6 +212,8 @@ public class ActivateProjector : MonoBehaviour
         {
             SetupRibbonProjection();
         }
+
+        ApplyDisplay2FinalSoftMask();
 
         if (useMediaPipeHandTracking)
         {
@@ -259,7 +288,14 @@ public class ActivateProjector : MonoBehaviour
         }
 
         bool hardwareInputActive = input != null && input.useHardwareInput;
-        bool manualTrigger = Application.isEditor && !hardwareInputActive && Input.GetKey(manualTriggerKey);
+        bool manualInputAvailable = Application.isEditor && !hardwareInputActive;
+        if (manualInputAvailable && Input.GetKeyDown(manualTriggerKey))
+        {
+            manualTriggerUntilTime = Time.time + Mathf.Max(0.05f, manualTriggerHoldSeconds);
+        }
+
+        bool manualTrigger = manualInputAvailable &&
+            (Input.GetKey(manualTriggerKey) || Time.time <= manualTriggerUntilTime);
         if (manualTrigger)
         {
             isTouching = true;
@@ -479,6 +515,11 @@ public class ActivateProjector : MonoBehaviour
         ribbonProjection.glowIntensity = ribbonGlowIntensity;
         ribbonProjection.followLagSeconds = ribbonFollowLagSeconds;
         ribbonProjection.fadeSeconds = ribbonFadeSeconds;
+        ribbonProjection.enableScreenEdgeFade = enableDisplay2EdgeFade;
+        ribbonProjection.screenEdgeFadeWidth = display2EdgeFadeWidth;
+        ribbonProjection.screenEdgeFadeStrength = display2EdgeFadeDarkness;
+        ribbonProjection.screenEdgeFadeSoftness = display2EdgeFadeSoftness;
+        ribbonProjection.screenCornerFadeBoost = display2EdgeFadeCornerBoost;
         ribbonProjection.enableParticleRibbon = enableParticleRibbon;
         ribbonProjection.enableTrailRendererRibbon = enableTrailRendererRibbon;
         ribbonProjection.particleRibbonMaxParticles = particleRibbonMaxParticles;
@@ -532,6 +573,41 @@ public class ActivateProjector : MonoBehaviour
         ribbonProjection.shakeWaveBrightness = shakeWaveBrightness;
         ribbonProjection.shakeWaveColor = shakeWaveColor;
 
+    }
+
+    private void ApplyDisplay2FinalSoftMask()
+    {
+        EnsureDisplay2EdgeFadeDefaults();
+
+        Shader.SetGlobalFloat(Display2FinalSoftMaskEnabledId, enableDisplay2EdgeFade ? 1f : 0f);
+        Shader.SetGlobalFloat(Display2FinalSoftMaskWidthId, Mathf.Clamp(display2EdgeFadeWidth, 0.01f, 0.7f));
+        Shader.SetGlobalFloat(Display2FinalSoftMaskStrengthId, Mathf.Clamp01(display2EdgeFadeDarkness));
+        Shader.SetGlobalFloat(Display2FinalSoftMaskSoftnessId, Mathf.Clamp(display2EdgeFadeSoftness, 0.25f, 4f));
+        Shader.SetGlobalFloat(Display2FinalSoftMaskCornerBoostId, Mathf.Clamp01(display2EdgeFadeCornerBoost));
+        Shader.SetGlobalFloat(Display2FinalSoftMaskVignetteStrengthId, 0.22f);
+    }
+
+    private void EnsureDisplay2EdgeFadeDefaults()
+    {
+        if (display2EdgeFadeDefaultsInitialized)
+        {
+            return;
+        }
+
+        enableDisplay2EdgeFade = true;
+        display2EdgeFadeWidth = 0.28f;
+        display2EdgeFadeDarkness = 0.85f;
+        display2EdgeFadeSoftness = 0.85f;
+        display2EdgeFadeCornerBoost = 0.45f;
+        display2EdgeFadeDefaultsInitialized = true;
+    }
+
+    private void EnsureManualTriggerDefaults()
+    {
+        if (manualTriggerHoldSeconds <= 0.05f)
+        {
+            manualTriggerHoldSeconds = 1.5f;
+        }
     }
 
     private void SetupExternalCameraDebugBackground()

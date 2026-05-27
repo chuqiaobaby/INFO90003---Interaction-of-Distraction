@@ -15,6 +15,11 @@ public sealed class Display2RibbonTrailController : MonoBehaviour
     [HideInInspector, Range(0.5f, 4f)] public float glowIntensity = 1.6f;
     [HideInInspector, Range(0.08f, 0.6f)] public float followLagSeconds = 0.18f;
     [HideInInspector, Range(0.4f, 3.5f)] public float fadeSeconds = 1.65f;
+    [HideInInspector] public bool enableScreenEdgeFade = true;
+    [HideInInspector, Range(0.01f, 0.7f)] public float screenEdgeFadeWidth = 0.28f;
+    [HideInInspector, Range(0f, 1f)] public float screenEdgeFadeStrength = 0.85f;
+    [HideInInspector, Range(0.25f, 4f)] public float screenEdgeFadeSoftness = 0.85f;
+    [HideInInspector, Range(0f, 1f)] public float screenCornerFadeBoost = 0.45f;
 
     [Header("Particle Ribbon Main")]
     [HideInInspector] public bool enableParticleRibbon = true;
@@ -308,7 +313,12 @@ public sealed class Display2RibbonTrailController : MonoBehaviour
                 Mathf.Max(mistEmissionPower, 3.2f),
                 mistFbmScale,
                 mistFbmFlowSpeed,
-                mistAlphaPower);
+                mistAlphaPower,
+                enableScreenEdgeFade,
+                screenEdgeFadeWidth,
+                screenEdgeFadeStrength,
+                screenEdgeFadeSoftness,
+                screenCornerFadeBoost);
         }
 
         if (mistMaterial != null)
@@ -330,7 +340,12 @@ public sealed class Display2RibbonTrailController : MonoBehaviour
                 mistEmissionPower,
                 mistFbmScale,
                 mistFbmFlowSpeed,
-                mistAlphaPower);
+                mistAlphaPower,
+                enableScreenEdgeFade,
+                screenEdgeFadeWidth,
+                screenEdgeFadeStrength,
+                screenEdgeFadeSoftness,
+                screenCornerFadeBoost);
         }
     }
 
@@ -346,7 +361,12 @@ public sealed class Display2RibbonTrailController : MonoBehaviour
         float emissionPower,
         float fbmScale,
         float fbmFlowSpeed,
-        float alphaPower)
+        float alphaPower,
+        bool enableScreenEdgeFade,
+        float screenEdgeFadeWidth,
+        float screenEdgeFadeStrength,
+        float screenEdgeFadeSoftness,
+        float screenCornerFadeBoost)
     {
         material.SetColor("_BaseColor", baseColor);
         material.SetColor("_Color", baseColor);
@@ -361,6 +381,10 @@ public sealed class Display2RibbonTrailController : MonoBehaviour
         material.SetFloat("_FbmScale", fbmScale);
         material.SetFloat("_FbmFlowSpeed", fbmFlowSpeed);
         material.SetFloat("_AlphaPower", alphaPower);
+        material.SetFloat("_ScreenEdgeFadeWidth", Mathf.Clamp(screenEdgeFadeWidth, 0.01f, 0.7f));
+        material.SetFloat("_ScreenEdgeFadeStrength", enableScreenEdgeFade ? Mathf.Clamp01(screenEdgeFadeStrength) : 0f);
+        material.SetFloat("_ScreenEdgeFadeSoftness", Mathf.Clamp(screenEdgeFadeSoftness, 0.25f, 4f));
+        material.SetFloat("_ScreenCornerFadeBoost", Mathf.Clamp01(screenCornerFadeBoost));
     }
 
     private void UpdateHands()

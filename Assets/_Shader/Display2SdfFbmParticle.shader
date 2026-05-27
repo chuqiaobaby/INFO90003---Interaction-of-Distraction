@@ -13,6 +13,10 @@ Shader "INFO90003/Display2 SDF FBM Particle"
         _FbmScale ("FBM Scale", Range(0.2, 16.0)) = 4.2
         _FbmFlowSpeed ("FBM Flow Speed", Range(0.0, 3.0)) = 0.18
         _AlphaPower ("Alpha Power", Range(0.2, 4.0)) = 1.15
+        _ScreenEdgeFadeWidth ("Screen Edge Fade Width", Range(0.01, 0.7)) = 0.28
+        _ScreenEdgeFadeStrength ("Screen Edge Fade Strength", Range(0.0, 1.0)) = 0.85
+        _ScreenEdgeFadeSoftness ("Screen Edge Fade Softness", Range(0.25, 4.0)) = 0.85
+        _ScreenCornerFadeBoost ("Screen Corner Fade Boost", Range(0.0, 1.0)) = 0.45
     }
 
     SubShader
@@ -49,6 +53,7 @@ Shader "INFO90003/Display2 SDF FBM Particle"
                 float4 vertex : SV_POSITION;
                 float2 uv : TEXCOORD0;
                 fixed4 color : COLOR;
+                float4 screenPosition : TEXCOORD1;
             };
 
             float4 _ColorA;
@@ -62,6 +67,10 @@ Shader "INFO90003/Display2 SDF FBM Particle"
             float _FbmScale;
             float _FbmFlowSpeed;
             float _AlphaPower;
+            float _ScreenEdgeFadeWidth;
+            float _ScreenEdgeFadeStrength;
+            float _ScreenEdgeFadeSoftness;
+            float _ScreenCornerFadeBoost;
 
             v2f vert(appdata v)
             {
@@ -69,6 +78,7 @@ Shader "INFO90003/Display2 SDF FBM Particle"
                 o.vertex = UnityObjectToClipPos(v.vertex);
                 o.uv = v.uv;
                 o.color = v.color;
+                o.screenPosition = ComputeScreenPos(o.vertex);
                 return o;
             }
 
@@ -103,6 +113,21 @@ Shader "INFO90003/Display2 SDF FBM Particle"
                 return v;
             }
 
+            float screenEdgeFade(float4 screenPosition)
+            {
+                float2 screenUv = screenPosition.xy / max(screenPosition.w, 0.0001);
+                float2 edgeDistance = min(screenUv, 1.0 - screenUv);
+                float nearestEdge = min(edgeDistance.x, edgeDistance.y);
+                float sideFade = smoothstep(0.0, max(_ScreenEdgeFadeWidth, 0.0001), nearestEdge);
+
+                float2 cornerDistance = edgeDistance / max(_ScreenEdgeFadeWidth, 0.0001);
+                float cornerFade = smoothstep(0.0, 1.35, length(cornerDistance));
+                float edgeFade = min(sideFade, lerp(1.0, cornerFade, _ScreenCornerFadeBoost));
+                edgeFade = pow(saturate(edgeFade), max(_ScreenEdgeFadeSoftness, 0.0001));
+
+                return lerp(1.0, edgeFade, saturate(_ScreenEdgeFadeStrength));
+            }
+
             fixed4 frag(v2f i) : SV_Target
             {
                 float2 centered = i.uv * 2.0 - 1.0;
@@ -124,7 +149,9 @@ Shader "INFO90003/Display2 SDF FBM Particle"
                 emission *= lerp(0.78, 1.25, flow);
 
                 float alpha = mask * i.color.a;
-                float3 color = flowColor * particleColor * emission * mask;
+                float displayEdgeFade = screenEdgeFade(i.screenPosition);
+                alpha *= displayEdgeFade;
+                float3 color = flowColor * particleColor * emission * mask * displayEdgeFade;
                 return float4(color, alpha);
             }
             ENDCG
