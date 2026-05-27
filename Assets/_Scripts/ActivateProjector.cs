@@ -316,7 +316,16 @@ public class ActivateProjector : MonoBehaviour
             handCount = 1;
         }
 
-        int interactionCount = isTouching ? Mathf.Min(handCount, 2) : 0;
+        // Suppress all Display 2 interactive effects when:
+        //   (a) the grounding prompt is active — only the instruction image should show, or
+        //   (b) the system is in cooldown between users — no new effects until next session.
+        bool groundingPromptActive = GroundingPrompt.Instance != null &&
+                                     GroundingPrompt.Instance.HasTriggered;
+        bool inCooldown = DistractionManager.Instance != null &&
+                          DistractionManager.Instance.IsInCooldown;
+        bool suppressEffects = groundingPromptActive || inCooldown;
+
+        int interactionCount = (isTouching && !suppressEffects) ? Mathf.Min(handCount, 2) : 0;
         if (pastelProjection != null)
         {
             pastelProjection.SetInteractionHands(handPositionBuffer, interactionCount);
@@ -330,7 +339,7 @@ public class ActivateProjector : MonoBehaviour
 
         bool canRepeatBurst = repeatRippleWhileTouching > 0f && Time.time - lastRippleTime >= repeatRippleWhileTouching;
 
-        if (isTouching && handCount > 0 && (!wasTouching || canRepeatBurst))
+        if (!suppressEffects && isTouching && handCount > 0 && (!wasTouching || canRepeatBurst))
         {
             for (int i = 0; i < handCount; i++)
             {
@@ -342,7 +351,7 @@ public class ActivateProjector : MonoBehaviour
 
             lastRippleTime = Time.time;
         }
-        else if (isTouching && !wasTouching)
+        else if (!suppressEffects && isTouching && !wasTouching)
         {
             if (pastelProjection != null)
             {

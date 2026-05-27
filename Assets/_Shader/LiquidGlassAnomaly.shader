@@ -81,7 +81,6 @@ Shader "Custom/LiquidGlassAnomaly"
         _DissolveProgress   ("Dissolve-to-Sparkles Progress",          Range(0.0, 1.0)) = 0.0
         _SparkleScale       ("Sparkle Cell Scale",                     Range(10,  120))  = 55
         _SparkleGlow        ("Sparkle Glow Intensity",                 Range(0.0,  8.0)) = 4.0
-
         [Space(6)][Header(Diagnostic)]
         [Toggle] _TestMode  ("Test Mode (solid red)", Float) = 0
     }
@@ -379,7 +378,7 @@ Shader "Custom/LiquidGlassAnomaly"
                 // ── Spawn/despawn scale & fade ────────────────────────────────
                 // sizeScale  0→1→0 across lifetime; drives blob size + ring radii.
                 // lifeFade   0→1→0 with tighter ramps; multiplied into final alpha.
-                float sizeScale = 1.0f; // size is constant; fade in/out is handled by lifeFade only
+                float sizeScale = 1.0f;
                 float lifeFade  = min(smoothstep(0.0f, 0.20f, _SpawnProgress),
                                       1.0f - smoothstep(0.80f, 1.0f, _SpawnProgress));
                 if (lifeFade < 0.001f) discard;

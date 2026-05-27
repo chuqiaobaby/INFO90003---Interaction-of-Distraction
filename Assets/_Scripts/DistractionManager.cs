@@ -9,13 +9,21 @@ public class DistractionManager : MonoBehaviour
     {
         Normal,
         Grounding,
-        Shielded
+        Shielded,
+        Cooldown
     }
 
     public static DistractionManager Instance { get; private set; }
 
-    public float CurrentFadeTime => currentFadeTime;
-    public bool IsShielded => currentState == SystemState.Shielded;
+    public float CurrentFadeTime        => currentFadeTime;
+    public bool  IsGrounding            => currentState == SystemState.Grounding;
+    public bool  IsShielded             => currentState == SystemState.Shielded;
+    public bool  IsInCooldown           => currentState == SystemState.Cooldown;
+    public bool  HasExperienceStarted   => hasExperienceStarted;
+    /// <summary>Seconds elapsed since the first touch. Read by GroundingPrompt.</summary>
+    public float GlobalDistractionTimer => globalDistractionTimer;
+    /// <summary>Current water level from hardware sensor (0–3). Read by SFXController.</summary>
+    public int   HardwareLevel          => hardwareLevel;
 
     [Header("--- Shader Properties (MUST MATCH SHADER GRAPH) ---")]
     public Material faceMaterial;
@@ -55,6 +63,13 @@ public class DistractionManager : MonoBehaviour
     public float groundingDuration = 5f;
     [Tooltip("How fast the tracing reverses if hands are released early")]
     public float backtrackSpeed = 1f;
+    [Tooltip("开启后：只有 GroundingPrompt 已经触发过提示，才允许进入 Grounding 状态。\n" +
+             "关闭后：随时都可以 grounding（旧行为）。")]
+    public bool requireGroundingPrompt = true;
+
+    [Header("--- 4. COOLDOWN BETWEEN USERS ---")]
+    [Tooltip("Seconds to block all interactions after a complete grounding + blow flow (before next user can start).")]
+    public float cooldownDuration = 20f;
 
     [Header("--- DEBUG MONITOR (Read Only) ---")]
     [SerializeField] private SystemState currentState = SystemState.Normal;
@@ -71,6 +86,7 @@ public class DistractionManager : MonoBehaviour
     [SerializeField] private float lockedWaterLevelEffect = 0f;
     [SerializeField] private float currentTouchEffect = 0f;
     [SerializeField] private float currentFadeTime = 1.5f;
+    [SerializeField] private float cooldownTimer = 0f;
 
     private void Awake()
     {
@@ -93,12 +109,61 @@ public class DistractionManager : MonoBehaviour
 
     private void Update()
     {
+        if (Input.GetKeyDown(KeyCode.R)) { FullReset(); return; }
+
+        if (currentState == SystemState.Cooldown)
+        {
+            UpdateCooldown();
+            return;
+        }
+
         ReadHardwareInput();
         UpdateGlobalDistractionTimer();
         UpdateWaterLevelEffect();
         UpdateStateMachine();
         UpdateTouchEffect();
         PushTraceProgressToShader();
+    }
+
+    private void UpdateCooldown()
+    {
+        cooldownTimer += Time.deltaTime;
+        if (cooldownTimer < cooldownDuration) return;
+
+        currentState  = SystemState.Normal;
+        cooldownTimer = 0f;
+        if (InstructionDisplay.Instance != null)
+            InstructionDisplay.Instance.ShowInstruction();
+    }
+
+    private void EnterCooldown()
+    {
+        ClearAllEffects();
+        currentState  = SystemState.Cooldown;
+        cooldownTimer = 0f;
+
+        BrokenMirrorLevelBridge bridge = FindObjectOfType<BrokenMirrorLevelBridge>();
+        if (bridge != null) bridge.ResetBridge();
+
+        Debug.Log($"[DistractionManager] Cooldown started ({cooldownDuration}s).");
+    }
+
+    public void FullReset()
+    {
+        currentState  = SystemState.Normal;
+        cooldownTimer = 0f;
+        ClearAllEffects();
+
+        InteractionVFXController vfx = FindObjectOfType<InteractionVFXController>();
+        if (vfx != null) vfx.HardReset();
+
+        BrokenMirrorLevelBridge bridge = FindObjectOfType<BrokenMirrorLevelBridge>();
+        if (bridge != null) bridge.ResetBridge();
+
+        if (InstructionDisplay.Instance != null)
+            InstructionDisplay.Instance.ShowInstruction();
+
+        Debug.Log("[DistractionManager] Full reset triggered (R key).");
     }
 
     private void ReadHardwareInput()
@@ -128,16 +193,28 @@ public class DistractionManager : MonoBehaviour
     {
         if (faceMaterial == null) return;
 
-        float targetEffect = Mathf.Lerp(minWaterLevelEffect, maxWaterLevelEffect, hardwareLevel / 3f);
+        // Water level effect is locked at minimum until the user first touches the water
+        // AND the intro instruction overlay has fully faded out.
+        bool instructionShowing = InstructionDisplay.Instance != null &&
+                                  InstructionDisplay.Instance.IsVisible;
+        float targetEffect = (hasExperienceStarted && !instructionShowing)
+            ? Mathf.Lerp(minWaterLevelEffect, maxWaterLevelEffect, hardwareLevel / 3f)
+            : minWaterLevelEffect;
+
+        // Once the grounding prompt has triggered, freeze the water level visual at
+        // whatever value it currently has — hardware level changes no longer affect it.
+        bool groundingFrozen = GroundingPrompt.Instance != null &&
+                               GroundingPrompt.Instance.HasTriggered;
 
         if (currentState == SystemState.Shielded)
         {
             currentWaterLevelEffect = Mathf.Lerp(currentWaterLevelEffect, lockedWaterLevelEffect, Time.deltaTime * effectSmoothSpeed);
         }
-        else
+        else if (!groundingFrozen)
         {
             currentWaterLevelEffect = Mathf.Lerp(currentWaterLevelEffect, targetEffect, Time.deltaTime * effectSmoothSpeed);
         }
+        // groundingFrozen && !Shielded → hold currentWaterLevelEffect as-is
 
         faceMaterial.SetFloat(waterLevelEffectProperty, currentWaterLevelEffect);
     }
@@ -160,7 +237,8 @@ public class DistractionManager : MonoBehaviour
         switch (currentState)
         {
             case SystemState.Normal:
-                if (isGrounding == 1) currentState = SystemState.Grounding;
+                if (isGrounding == 1 && IsGroundingAllowed())
+                    currentState = SystemState.Grounding;
                 break;
 
             case SystemState.Grounding:
@@ -181,8 +259,7 @@ public class DistractionManager : MonoBehaviour
                 groundingTimer = groundingDuration;
                 if (isBlowing == 1)
                 {
-                    ClearAllEffects();
-                    ResetToNormal();
+                    EnterCooldown();
                 }
                 break;
         }
@@ -198,18 +275,25 @@ public class DistractionManager : MonoBehaviour
         if (faceMaterial != null)
         {
             faceMaterial.SetFloat(touchActiveProperty, isTouching == 1 ? 1f : 0f);
-            faceMaterial.SetFloat(blowActiveProperty, isBlowing == 1 ? 1f : 0f);
+            // Blow effect only activates when fully shielded — not during grounding or any other phase.
+            bool blowValid = isBlowing == 1 && currentState == SystemState.Shielded;
+            faceMaterial.SetFloat(blowActiveProperty, blowValid ? 1f : 0f);
         }
+
+        // When the grounding prompt has triggered, freeze the touch effect value.
+        // All distortion stays locked at its current level until blow clears it.
+        bool groundingFrozen = GroundingPrompt.Instance != null &&
+                               GroundingPrompt.Instance.HasTriggered;
 
         if (isTouching == 1)
         {
             currentTouchEffect = touchEffectStrength;
         }
-        else
+        else if (!groundingFrozen)
         {
             float safeTime = Mathf.Max(0.01f, timeToMaxDistraction);
             float progress = Mathf.Clamp01(globalDistractionTimer / safeTime);
-            
+
             currentFadeTime = Mathf.Lerp(fastFadeTimeAtStart, slowFadeTimeAtEnd, fadeTimeCurve.Evaluate(progress));
 
             float decaySpeed = touchEffectStrength / Mathf.Max(0.1f, currentFadeTime);
@@ -217,10 +301,22 @@ public class DistractionManager : MonoBehaviour
 
             currentTouchEffect = Mathf.MoveTowards(currentTouchEffect, 0f, decaySpeed * Time.deltaTime);
         }
-        
+        // groundingFrozen && !touching → decay is suppressed; value holds as-is
+
         currentTouchEffect = Mathf.Clamp(currentTouchEffect, 0f, touchEffectStrength);
 
         if (faceMaterial != null) faceMaterial.SetFloat(touchEffectProperty, currentTouchEffect);
+    }
+
+    /// <summary>
+    /// 当 requireGroundingPrompt = true 时，必须等 GroundingPrompt 触发过才返回 true。
+    /// GroundingPrompt 不在场景中时视为已解锁（向下兼容）。
+    /// </summary>
+    private bool IsGroundingAllowed()
+    {
+        if (!requireGroundingPrompt) return true;
+        // 必须等 fade-in 完全结束（IsFullyShown），而不只是触发了提示（HasTriggered）。
+        return GroundingPrompt.Instance == null || GroundingPrompt.Instance.IsFullyShown;
     }
 
     private void EnterShieldedState()

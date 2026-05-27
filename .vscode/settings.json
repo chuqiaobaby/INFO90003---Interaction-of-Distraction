@@ -67,6 +67,6 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "INFO90003---Interaction-of-Distraction-5.22.slnx",
+    "dotnet.defaultSolution": "INFO90003---Interaction-of-Distraction-main.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false
 }

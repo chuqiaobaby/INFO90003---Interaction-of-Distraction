@@ -29,6 +29,19 @@ public sealed class BrokenMirrorLevelBridge : MonoBehaviour
         DeviceInputManager hw = DeviceInputManager.Instance;
         DistractionManager dm = DistractionManager.Instance;
 
+        if (dm != null && dm.IsInCooldown) return;
+
+        // Freeze mirror while the intro instruction is still visible.
+        bool instructionShowing = InstructionDisplay.Instance != null &&
+                                  InstructionDisplay.Instance.IsVisible;
+        if (instructionShowing) return;
+
+        // Once the grounding prompt has appeared, freeze mirror state —
+        // no new cracks and no level-driven changes until after blow + reset.
+        bool groundingFrozen = GroundingPrompt.Instance != null &&
+                               GroundingPrompt.Instance.HasTriggered;
+        if (groundingFrozen) return;
+
         int  level          = hw != null ? hw.Level          : 0;
         bool blowingNow     = hw != null ? hw.isBlowing == 1  : Input.GetKeyDown(KeyCode.B);
         bool blowRisingEdge = blowingNow && !_wasBlowing;
@@ -73,5 +86,19 @@ public sealed class BrokenMirrorLevelBridge : MonoBehaviour
             if (!shieldedNow && level > mirrorFractureController.ActiveState)
                 mirrorFractureController.SetFractureState(level);
         }
+    }
+
+    public void ResetBridge()
+    {
+        if (mirrorFractureController != null) mirrorFractureController.ResetMirror();
+
+        DeviceInputManager hw = DeviceInputManager.Instance;
+        bool isHardwareMode   = hw != null && hw.useHardwareInput;
+        int  currentLevel     = hw != null ? hw.Level : 0;
+
+        _lastLevel          = currentLevel;
+        _wasBlowing         = false;
+        _wasShielded        = false;
+        _awaitingLevelReset = isHardwareMode && currentLevel > 0;
     }
 }

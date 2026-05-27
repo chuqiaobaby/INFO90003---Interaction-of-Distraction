@@ -12,64 +12,135 @@
  */
 
 // Uncomment to see sound sensor values for calibration
-// #define DEBUG_SOUND
+//#define DEBUG_SOUND
+
+#include <FastLED.h>
+
+#define LED_PIN         26
+#define NUM_LEDS        150
+#define BRIGHTNESS      100
+
+#define TOUCH_PIN       4
+#define TOUCH_THRESHOLD 350
+
+CRGB leds[NUM_LEDS];
+
+unsigned long lastLedUpdate = 0;
+unsigned long lastSerialUpdate = 0;
+const unsigned long LED_UPDATE_INTERVAL = 20;    // Update LEDs every 20ms
+const unsigned long SERIAL_UPDATE_INTERVAL = 200; // Send data every 200ms
 
 // ====== WATER LEVEL SENSORS ======
 const int sensorLow  = 14;
-const int sensorMid  = 27;
-const int sensorHigh = 26;
+const int sensorMid  = 32;
+const int sensorHigh = 15;
+
+const int threshold = 4050;
+
+int isTriggered(int pin){
+  int value = analogRead(pin);
+  return (value < threshold);  // true if water detected
+}
 
 // ====== CAPACITIVE TOUCH SENSOR ======
-const int touchPin = 4;
-const int ledPin = 12;
-const int TOUCH_THRESHOLD = 500;  // Calibrate as needed
+
+// Rainbow cycling
+uint8_t hue = 0;
+
+// Pulse brightness
+uint8_t pulseBrightness = 0;
+int pulseDirection = 1;
 
 // ====== GROUNDING SENSORS (LDRs) ======
-const int ldrLeft  = 34;
-const int ldrRight = 35;
-const int DARK_THRESHOLD = 1500;  // Calibrate as needed
+const int ldrLeft  = 39;
+const int ldrRight = 36;
+const int DARK_THRESHOLD = 160;  // Calibrate as needed to esnure LDRs are covered
 
-// ====== SOUND SENSORS (BLOWING) ======
-// NOTE: Requires sound sensor modules with ANALOG output (AO pin)
-// Common modules: KY-037, LM393-based sensors
-// Connect AO pins to ESP32 analog-capable GPIOs (32, 33, 34, 35, etc.)
-const int sound1 = 32;  // Analog pin for sound sensor 1
-const int sound2 = 33;  // Analog pin for sound sensor 2
-const int SOUND_THRESHOLD = 2500;  // Analog threshold (0-4095 on ESP32)
-                                    // Higher = less sensitive, adjust based on room noise
-const int BLOW_DURATION_MS = 150;   // Minimum duration to count as intentional blow
-const bool REQUIRE_BOTH_SENSORS = false;  // Set true to require both sensors (more reliable)
-const unsigned long BLOW_COOLDOWN_MS = 1500; // ms before another blow can be confirmed
+// ================= MOTOR =================
+const int motorDIR = 12; 
+const int motorPWM = 13;
 
+const int motor2DIR = 33;
+const int motor2PWM = 27;
+
+// Motor State
+const unsigned int MOTOR_RUNTIME = 10000;
+unsigned long motorStartTime = 0;
+bool motorActive = false;
+
+// ====== SOUND SENSOR (BLOWING) ======
+// Using DIGITAL output (DO pin)
+// Sensor outputs:
+// HIGH (1) = idle / no blow
+// LOW  (0) = sound detected
+const int soundPin = 34;
+
+const int BLOW_DURATION_MS = 120;
+const int SOUND_WINDOW_MS = 200;
+
+unsigned long soundWindowStart = 0;
+int soundHighCount = 0;
+int soundSampleCount = 0;
+
+bool stableBlowing = false;
+bool isBlowing = false;
+
+bool previousTouchState = false;
+bool previousTouchReading = false;
+bool stableTouchState = false;
+
+bool previousBlowState = false;
+
+unsigned long groundingStartTime = 0;
+bool groundingActive = false;
+
+const unsigned long GROUNDING_ANIMATION_TIME = 5000; // 5 seconds
+
+bool groundingLatched = false;
+
+unsigned long touchChangeTime = 0;
+const unsigned long TOUCH_DEBOUNCE_MS = 200;
 // Blow detection timing
 unsigned long blowStartTime = 0;
 bool blowDetected = false;
-unsigned long blowConfirmedTime = 0;
+
+const unsigned long MOTOR_COOLDOWN = 15000; // 15 seconds
+unsigned long lastMotorStopTime = 0;
 
 void setup() {
   Serial.begin(115200);
   
-  // Water level sensors
-  pinMode(sensorLow, INPUT);
-  pinMode(sensorMid, INPUT);
-  pinMode(sensorHigh, INPUT);
-  
-  // Touch LED indicator
-  pinMode(ledPin, OUTPUT);
+  //Touch sensor 
+  FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS);
+    FastLED.setBrightness(BRIGHTNESS);
+
+    FastLED.clear();
+    FastLED.show();
   
   // Sound sensors
-  pinMode(sound1, INPUT);
-  pinMode(sound2, INPUT);
-  
-  // LDR sensors are analog inputs (no pinMode needed)
+  pinMode(soundPin, INPUT);
+
+  // Motor
+  pinMode(motorDIR, OUTPUT);
+  pinMode(motorPWM, OUTPUT);
+  pinMode(motor2DIR, OUTPUT);
+  pinMode(motor2PWM, OUTPUT);
+
+  digitalWrite(motorDIR, LOW);
+  analogWrite(motorPWM, 0);
+  digitalWrite(motor2DIR, LOW);
+  analogWrite(motor2PWM, 0);
 }
 
 void loop() {
+  // ====== DECLARE CURRENT TIME FIRST ======
+  unsigned long currentTime = millis();  // MOVED TO TOP!
+  
   // ====== READ WATER LEVEL (0-3) ======
   // Sensors use inverted logic (NPN pulls LOW when active)
-  bool low  = !digitalRead(sensorLow);
-  bool mid  = !digitalRead(sensorMid);
-  bool high = !digitalRead(sensorHigh);
+  bool low  = isTriggered(sensorLow);
+  bool mid  = isTriggered(sensorMid);
+  bool high = isTriggered(sensorHigh);
   
   int waterLevel;
   if (high)      waterLevel = 3;
@@ -78,81 +149,228 @@ void loop() {
   else           waterLevel = 0;
   
   // ====== READ TOUCH SENSOR (0 or 1) ======
-  int touchValue = touchRead(touchPin);
-  int isTouching = (touchValue < TOUCH_THRESHOLD) ? 1 : 0;
-  
-  // Update LED indicator
-  digitalWrite(ledPin, isTouching ? HIGH : LOW);
-  
+  int touchValue = touchRead(TOUCH_PIN);
+  bool rawTouch = (touchValue < TOUCH_THRESHOLD);
+
+  // Detect change
+  if (rawTouch != previousTouchReading) {
+      touchChangeTime = currentTime;
+  }
+
+  // If stable for long enough, accept new state
+  if ((currentTime - touchChangeTime) > TOUCH_DEBOUNCE_MS) {
+      stableTouchState = rawTouch;
+  }
+
+  previousTouchReading = rawTouch;
+
+  int isTouching = stableTouchState ? 1 : 0;
+
   // ====== READ GROUNDING SENSORS (0 or 1) ======
   int leftValue  = analogRead(ldrLeft);
   int rightValue = analogRead(ldrRight);
   bool isGrounding = (leftValue < DARK_THRESHOLD) && (rightValue < DARK_THRESHOLD) ? 1 : 0;
   
-  // ====== READ SOUND SENSORS (0 or 1) ======
-  // Read analog values (0-4095 on ESP32)
-  int sound1Value = analogRead(sound1);
-  int sound2Value = analogRead(sound2);
-  
-  // Check if sound exceeds threshold
-  bool s1Active = sound1Value > SOUND_THRESHOLD;
-  bool s2Active = sound2Value > SOUND_THRESHOLD;
-  
-  // Determine if sound is currently detected
-  bool soundNow;
-  if (REQUIRE_BOTH_SENSORS) {
-    soundNow = s1Active && s2Active;  // Both sensors must detect
-  } else {
-    soundNow = s1Active || s2Active;  // Either sensor can detect
-  }
-  
-  // Duration filtering: require sustained sound
-  unsigned long currentTime = millis();
+  // ====== SOUND SENSOR ======
+  int rawSound = digitalRead(soundPin);
 
-  // One-shot blow: confirm once, then require cooldown + silence before re-arming
-  if (blowDetected) {
-    // Already fired — hold signal for 2 loop cycles (~40ms) then clear
-    if (currentTime - blowConfirmedTime >= 40) {
-      blowDetected = false;
-      blowStartTime = 0;
-    }
-  } else if (currentTime - blowConfirmedTime < BLOW_COOLDOWN_MS) {
-    // In cooldown — ignore sensor, drain the start timer
-    blowStartTime = 0;
-  } else if (soundNow) {
-    if (blowStartTime == 0) {
-      blowStartTime = currentTime;
-    } else if ((currentTime - blowStartTime) >= BLOW_DURATION_MS) {
-      blowDetected = true;
-      blowConfirmedTime = currentTime;
-    }
-  } else {
-    blowStartTime = 0;
+  // start window
+  if (soundWindowStart == 0) {
+    soundWindowStart = currentTime;
   }
 
-  int isBlowing = blowDetected ? 1 : 0;
+  soundSampleCount++;
+
+  // count highs in window
+  if (rawSound == HIGH) {
+    soundHighCount++;
+  }
+
+  // end window → evaluate
+  if (currentTime - soundWindowStart >= SOUND_WINDOW_MS) {
+
+    float ratio = (float)soundHighCount / soundSampleCount;
+
+    stableBlowing = (ratio > 0.7);
+
+    // reset window
+    soundWindowStart = currentTime;
+    soundHighCount = 0;
+    soundSampleCount = 0;
+  }
+
+  isBlowing = stableBlowing ? 1 : 0;
+
+// ===== MOTOR CONTROL WITH COOLDOWN =====
+
+// Can only trigger if:
+// 1. blowing detected
+// 2. motor not already active
+// 3. cooldown finished
+bool cooldownFinished = (currentTime - lastMotorStopTime >= MOTOR_COOLDOWN);
+
+if (isBlowing == 1 && !motorActive && cooldownFinished) {
+
+    digitalWrite(motorDIR, LOW);
+    analogWrite(motorPWM, 255);
+
+    digitalWrite(motor2DIR, LOW);
+    analogWrite(motor2PWM, 150);
+
+    motorStartTime = currentTime;
+    motorActive = true;
+
+    Serial.println("Motor START");
+
+} 
+
+// Stop motor after runtime
+if (motorActive && (currentTime - motorStartTime >= MOTOR_RUNTIME)) {
+
+    digitalWrite(motorDIR, LOW);
+    analogWrite(motorPWM, 0);
+
+    digitalWrite(motor2DIR, LOW);
+    analogWrite(motor2PWM, 0);
+
+    motorActive = false;
+
+    // Start cooldown timer
+    lastMotorStopTime = currentTime;
+
+    Serial.println("Motor STOP -> Cooldown started");
+}
+
+bool blowStarted = (isBlowing == 1 && !previousBlowState);
+
+if (blowStarted) {
+
+    // ONLY triggers once per blowing event
+    FastLED.clear(true);
+    FastLED.show();
+
+    // Optional: reset states so system restarts cleanly
+    groundingLatched = false;
+    groundingStartTime = 0;
+
+} else {
+
+if (isGrounding && !groundingLatched) {
+
+    // Start timing (only once)
+    if (groundingStartTime == 0) {
+        groundingStartTime = currentTime;
+    }
+
+    float progress = (float)(currentTime - groundingStartTime) / 5000.0;
+
+    // If completed → latch ON permanently
+    if (progress >= 1.0) {
+        groundingLatched = true;
+        progress = 1.0;
+    }
+
+    int litLEDs = progress * NUM_LEDS;
+
+    for (int i = 0; i < NUM_LEDS; i++) {
+        if (i < litLEDs) {
+            leds[i] = CHSV(0, 0, 255); // white
+        } else {
+            leds[i] = CRGB::Black;
+        }
+    }
+
+    FastLED.show();
+
+} else {
+
+    // ❗ RESET if grounding stops BEFORE latch
+    if (!groundingLatched) {
+        groundingStartTime = 0;
+
+        FastLED.clear(true);
+    }
+
+    // After latch → stay ON permanently
+    if (groundingLatched) {
+        for (int i = 0; i < NUM_LEDS; i++) {
+            leds[i] = CHSV(0, 0, 255);
+        }
+        FastLED.show();
+    }
+
+    // Normal touch only if not latched
+    if (!groundingLatched) {
+
+        if (isTouching) {
+
+            if (!previousTouchState) {
+                hue += 32;
+            }
+
+            for (int i = 0; i < NUM_LEDS; i++) {
+                leds[i] = CHSV(hue, 255, 255);
+            }
+
+            FastLED.show();
+
+        }
+    }
+
+    previousTouchState = isTouching;
+  }
+}
+
+previousBlowState = isBlowing;
   
-  #ifdef DEBUG_SOUND
-  // Debug output for calibration (comment out for production)
-  Serial.print("Sound1: ");
-  Serial.print(sound1Value);
-  Serial.print(" | Sound2: ");
-  Serial.print(sound2Value);
-  Serial.print(" | Threshold: ");
-  Serial.print(SOUND_THRESHOLD);
-  Serial.print(" | Blowing: ");
-  Serial.println(isBlowing);
-  #endif
+  if (currentTime - lastSerialUpdate >= SERIAL_UPDATE_INTERVAL) {
+    lastSerialUpdate = currentTime;
+
+#ifdef DEBUG_SOUND
+    Serial.print("Sound: ");
+    Serial.print(digitalRead(soundPin));
+    Serial.print(" | Blowing: ");
+    Serial.println(isBlowing);
+#endif
+
+    /*Serial.print("Motor PWR: ");
+    Serial.print(motorPWM);
+    Serial.print(" Motor Activity: ");
+    Serial.println(motorActive);*/
+
+    /*Serial.print("Left LDR:");
+    Serial.print(leftValue);
+    Serial.print("Right LDR:");
+    Serial.println(rightValue);*/
+
+    /*Serial.print("Touch Value:");
+    Serial.println(touchValue);*/
+
+    /*Serial.print("Low: ");
+    Serial.print(analogRead(sensorLow));
+    Serial.print(" Mid: ");
+    Serial.print(analogRead(sensorMid));
+    Serial.print(" High: ");
+    Serial.println(analogRead(sensorHigh));*/
+
+    /*Serial.print("Motor Active:");
+    Serial.println(motorActive);
+    Serial.print("Motor Cooldown: ");
+    Serial.println(cooldownFinished);*/
+
+
+    //Serial.println(rawSound);
+
+    // ====== SEND DATA TO UNITY ======
+    // Format: [WaterLevel],[IsTouching],[IsGrounding],[IsBlowing]
+    Serial.print(waterLevel);
+    Serial.print(",");
+    Serial.print(isTouching);
+    Serial.print(",");
+    Serial.print(isGrounding);
+    Serial.print(",");
+    Serial.println(isBlowing);
+  }
   
-  // ====== SEND DATA TO UNITY ======
-  // Format: [WaterLevel],[IsTouching],[IsGrounding],[IsBlowing]
-  Serial.print(waterLevel);
-  Serial.print(",");
-  Serial.print(isTouching);
-  Serial.print(",");
-  Serial.print(isGrounding);
-  Serial.print(",");
-  Serial.println(isBlowing);
-  
-  delay(20);  // 50Hz sampling — fast enough for all sensors
+  delay(25);  // Sampling rate - adjust as needed
 }

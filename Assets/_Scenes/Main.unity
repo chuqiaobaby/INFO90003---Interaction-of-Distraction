@@ -170,7 +170,7 @@ MonoBehaviour:
   requestedWidth: 1280
   requestedHeight: 720
   requestedFps: 30
-  forceFlipY: 1
+  forceFlipY: 0
 --- !u!1 &260361347
 GameObject:
   m_ObjectHideFlags: 0
@@ -219,11 +219,104 @@ MonoBehaviour:
   portName: COM3
   baudRate: 115200
   blowCooldownSeconds: 2
-  showDebugOverlay: 1
+  showDebugOverlay: 0
   Level: 0
   isTouching: 0
   isGrounding: 0
   isBlowing: 0
+--- !u!1 &268702588
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 268702590}
+  - component: {fileID: 268702589}
+  m_Layer: 0
+  m_Name: GroundingInstructionManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &268702589
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 268702588}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 453f197cffe732f40a084ed76f5882c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GroundingPrompt
+  touchCountThreshold: 10
+  timerThreshold: 20
+  display1Index: 0
+  display1Image: {fileID: 21300000, guid: 9c6e1c9b24784e84e8f68a393bf68656, type: 3}
+  display1ImageTint: {r: 1, g: 1, b: 1, a: 1}
+  display1ImageSidePadding: 0.147
+  display1ImageHeightFraction: 0.396
+  display1ImageCenterY: 0.453
+  display1Image2: {fileID: 21300000, guid: 651f3cbac1e11b94e9c371891c97c723, type: 3}
+  display1Image2Tint: {r: 1, g: 1, b: 1, a: 1}
+  display1Image2SidePadding: 0.127
+  display1Image2HeightFraction: 0.78
+  display1Image2CenterY: 0.337
+  handAnimStartCenterY: 0.232
+  handAnimEndCenterY: 0.188
+  handAnimCycleDuration: 2.19
+  handAnimPauseDuration: 0.61
+  showTextOnDisplay1: 1
+  display1Text: 'The noise has fragmented your focus.
+
+
+    Slowly immerse both hands
+    into the water and press against the basin floor. Feel the coolness anchor you
+    to this moment.
+
+
+    As you connect with the base, let your breath steady and
+    the digital clutter dissolve. Stay here until the water goes still.
+
+
+    You
+    are grounded. '
+  display1Font: {fileID: 11400000, guid: c54876b06100a8b4c8ec421f7aa26198, type: 2}
+  display1FontSize: 52
+  display1TextColor: {r: 1, g: 1, b: 1, a: 1}
+  display1TextStyle: 1
+  display1TextCenterY: 0.663
+  display1TextHeight: 0.215
+  display1TextSidePadding: 0.047
+  display2Index: 1
+  display2Image: {fileID: 21300000, guid: 62fad04bdaf267846961263e5f9ba055, type: 3}
+  display2ImageTint: {r: 1, g: 1, b: 1, a: 1}
+  display2ImageSidePadding: 0
+  display2ImageHeightFraction: 0.853
+  display2ImageCenterY: 0.5
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.55}
+  fadeInDuration: 1.2
+  fadeOutDuration: 0.6
+  showDebugOverlay: 0
+--- !u!4 &268702590
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 268702588}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -490,6 +583,152 @@ MonoBehaviour:
   m_ShadowLayerMask: 1
   m_RenderingLayers: 1
   m_ShadowRenderingLayers: 1
+--- !u!1 &426963789
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 426963790}
+  - component: {fileID: 426963792}
+  - component: {fileID: 426963791}
+  m_Layer: 0
+  m_Name: BGM
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &426963790
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 426963789}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: -0, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &426963791
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 426963789}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e95d46796d9bf74e826f29322e9079f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BGMController
+  audioSource: {fileID: 0}
+  targetVolume: 0.7
+  fadeInDuration: 2
+  fadeOutDuration: 3
+--- !u!82 &426963792
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 426963789}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 8300000, guid: 778230f1a3920734fb417edbbb02adce, type: 3}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 1
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
 --- !u!1 &536995482
 GameObject:
   m_ObjectHideFlags: 0
@@ -541,24 +780,32 @@ MonoBehaviour:
   ringColor: {r: 0.58679235, g: 1, b: 0.919155, a: 0.85}
   ringExpandDuration: 1.44
   ringThickness: 0.02
+  ringsPerSecond: 0.5
   borderGlowColor: {r: 1, g: 1, b: 1, a: 0.81960785}
   borderPulseSpeed: 2.5
   borderGlowFraction: 0.17
   shieldParticleColor: {r: 1, g: 1, b: 1, a: 1}
-  particlesPerSecond: 20
-  particleSizeRange: {x: 3, y: 5.58}
+  particlesPerSecond: 60
+  particleSizeRange: {x: 4.54, y: 8.54}
   particleLifetimeRange: {x: 1, y: 2.5}
   particleSpeedRange: {x: 50, y: 150}
   liquidGlassMaterial: {fileID: 2100000, guid: c2e747ce29dc632478f4ef2120022b20, type: 2}
-  touchEffectPixelSize: {x: 600, y: 600}
+  touchEffectPixelSize: {x: 500, y: 500}
   touchEffectDepth: 2
   touchEffectPadding: 0.055
   touchGlassMaxOpacity: 0.95
   touchRepeatInterval: 0.5
-  syncTouchColors: 1
+  syncTouchColors: 0
   syncCoreColor: {r: 0.1, g: 2, b: 3, a: 1}
   touchSpawnDuration: 0.521
   touchDespawnDuration: 0.82
+  digitalGlitchMaterial: {fileID: 2100000, guid: 86475298c528e074fb1e278c96caaea7, type: 2}
+  touchEffectMode: 3
+  glitchGridVariation: 2.9
+  etherealFluidMaterial: {fileID: 2100000, guid: 2b6a6ab0126e02c4a94e797498473ea3, type: 2}
+  etherealStreakVariation: 3
+  etherealDensityVariation: 4
+  etherealPixelSize: {x: 260, y: 260}
   shakeAmount: 4
   shakeSpeed: 15
   blowFadeDuration: 0.5
@@ -660,8 +907,10 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  groundingDuration: 5
+  groundingDuration: 10
   backtrackSpeed: 1
+  requireGroundingPrompt: 1
+  cooldownDuration: 20
   currentState: 0
   groundingTimer: 0
   traceProgress: 0
@@ -675,6 +924,7 @@ MonoBehaviour:
   lockedWaterLevelEffect: 0
   currentTouchEffect: 0
   currentFadeTime: 1.5
+  cooldownTimer: 0
 --- !u!4 &582206454
 Transform:
   m_ObjectHideFlags: 0
@@ -685,6 +935,74 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 10.48876, y: 0.00002, z: -131.51894}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &606987050
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 606987052}
+  - component: {fileID: 606987051}
+  m_Layer: 0
+  m_Name: IntroInstructionManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &606987051
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 606987050}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bfe99ff3ae3233e43808b48841ba47d7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InstructionDisplay
+  targetDisplay: 0
+  overlayColor: {r: 0.6981132, g: 0.6203987, b: 0.6203987, a: 0.18039216}
+  titleText: Welcome to Ephemeral Focus
+  titleFont: {fileID: 11400000, guid: 77a21d785cb19af439cd344eb02dcd34, type: 2}
+  titleFontSize: 105
+  titleColor: {r: 1, g: 1, b: 1, a: 1}
+  titleStyle: 1
+  titleCenterY: 0.8
+  titleHeight: 0.16
+  bodyText: "Imagine this basin as your calm focus.Play with the water. \nThis is
+    the search for dopamine,where we slowly drift into distraction.\n\nThe bubbles
+    represent the constant stimuli around us.\nYou may gently place them into the
+    water and feel the change.\n\nImmerse your hands to begin the journey of losing
+    focus and healing yourself."
+  bodyFont: {fileID: 11400000, guid: 77a21d785cb19af439cd344eb02dcd34, type: 2}
+  bodyFontSize: 52
+  bodyColor: {r: 0.92, g: 0.92, b: 0.92, a: 1}
+  bodyStyle: 1
+  bodyLineSpacing: 6
+  bodyCenterY: 0.46
+  bodyHeight: 0.5
+  sidePadding: 0.04
+  fadeInDuration: 0.8
+  fadeOutDuration: 0.3
+--- !u!4 &606987052
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 606987050}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: 0, z: -0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -740,17 +1058,17 @@ MonoBehaviour:
   enableTrailRendererRibbon: 0
   ribbonScale: 0.42
   ribbonGlowIntensity: 1.63
-  ribbonFollowLagSeconds: 0.1
-  particleRibbonMaxParticles: 1250
+  ribbonFollowLagSeconds: 0.18
+  particleRibbonMaxParticles: 2838
   particleRibbonAmount: 1050
-  particleRibbonSize: 0.239
-  particleRibbonLifetime: 1.23
+  particleRibbonSize: 0.141
+  particleRibbonLifetime: 1.85
   particleRibbonForce: 1.15
   particleRibbonBackflow: 0.82
   particleRibbonSpread: 0.34
   particleRibbonNoise: 0.95
   particleRibbonHeadBrightness: 2.1
-  particleRibbonTailOpacity: 0.025
+  particleRibbonTailOpacity: 0.057
   enableRibbonColorCycle: 1
   ribbonColorCycleSeconds: 3
   ribbonColorCyclePalette:
@@ -791,7 +1109,7 @@ MonoBehaviour:
   mistAlphaPower: 2.31
   mistFlowColorA: {r: 0.78431374, g: 0.41960785, b: 1, a: 1}
   mistFlowColorB: {r: 1, g: 0.56078434, b: 0.9372549, a: 1}
-  enableShakeWaveBurst: 1
+  enableShakeWaveBurst: 0
   shakeWaveResourcePath: ShakeWaveI/Prefebs/shake_wave_1
   shakeWaveScale: 3.49
   shakeWaveLifetime: 2.8
@@ -848,8 +1166,8 @@ MonoBehaviour:
   mediaPipeExternalCameraOrdinal: 0
   useHandTrackingPosition: 1
   useMediaPipeHandTracking: 1
-  mediaPipeHandVisibleTriggersRipple: 0
-  useMousePositionWhenHandMissing: 0
+  mediaPipeHandVisibleTriggersRipple: 1
+  useMousePositionWhenHandMissing: 1
   repeatRippleWhileTouching: 0
   handTrackingRotatePosition180: 0
   handTrackingFlipX: 0
@@ -1100,7 +1418,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.64005, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.595345, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1119,6 +1437,216 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ScreenFillQuad
   targetCamera: {fileID: 330585545}
   depth: 50
+--- !u!1 &1028278060
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1028278061}
+  - component: {fileID: 1028278063}
+  - component: {fileID: 1028278062}
+  m_Layer: 0
+  m_Name: SoundsManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1028278061
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1028278060}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: -0, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1028278062
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1028278060}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76c79c6f737bc804390d00845f9231de, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SFXController
+  waterLevel1Clip: {fileID: 8300000, guid: 036a63ed9893d814f89453a6e0495b0d, type: 3}
+  waterLevel1Volume: 1
+  waterLevel2Clip: {fileID: 8300000, guid: 036a63ed9893d814f89453a6e0495b0d, type: 3}
+  waterLevel2Volume: 1
+  waterLevel3Clip: {fileID: 8300000, guid: 036a63ed9893d814f89453a6e0495b0d, type: 3}
+  waterLevel3Volume: 1
+  groundingClip: {fileID: 0}
+  groundingVolume: 1
+  blowClearClip: {fileID: 8300000, guid: 8e1d851f634394b4b8e14dd9cab9137f, type: 3}
+  blowClearVolume: 1
+--- !u!82 &1028278063
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1028278060}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_Resource: {fileID: 0}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!1 &1558297017
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1558297019}
+  - component: {fileID: 1558297018}
+  m_Layer: 0
+  m_Name: BlowInstructionManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1558297018
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1558297017}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a0ebd134f1ab99a428e3da9a8d7d2c0f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlowPrompt
+  displayIndex: 0
+  promptText: 'Take a deep, mindful breath.
+
+    Exhale the chaos. Reclaim your clarity.'
+  font: {fileID: 11400000, guid: 77a21d785cb19af439cd344eb02dcd34, type: 2}
+  fontSize: 52
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  textStyle: 1
+  textCenterY: 0.5
+  textHeight: 0.2
+  textSidePadding: 0.1
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.45}
+  fadeInDuration: 1
+  fadeOutDuration: 0.5
+--- !u!4 &1558297019
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1558297017}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: -0, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1592376372
 GameObject:
   m_ObjectHideFlags: 0
@@ -1365,7 +1893,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.64005, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.595345, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1477,3 +2005,8 @@ SceneRoots:
   - {fileID: 122977768}
   - {fileID: 536995484}
   - {fileID: 765055270}
+  - {fileID: 606987052}
+  - {fileID: 268702590}
+  - {fileID: 1558297019}
+  - {fileID: 426963790}
+  - {fileID: 1028278061}

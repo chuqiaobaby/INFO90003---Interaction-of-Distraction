@@ -24,6 +24,9 @@ public class InteractionVFXController : MonoBehaviour
     public Color ringColor = new Color(0.00f, 1.00f, 0.816f, 0.85f);
     [Range(0.8f, 2.5f)]  public float ringExpandDuration = 1.3f;
     [Range(0.02f, 0.50f)] public float ringThickness = 0.22f;
+    [Tooltip("每秒生成几个圈。总圈数 = groundingDuration × ringsPerSecond\n" +
+             "例：groundingDuration=10、ringsPerSecond=1 → 10秒10个圈，每秒1个。")]
+    [Range(0.1f, 10f)] public float ringsPerSecond = 1f;
 
     // ── Border Glow ───────────────────────────────────────────────────────────
 
@@ -36,7 +39,7 @@ public class InteractionVFXController : MonoBehaviour
 
     [Header("Shielded Particles")]
     public Color   shieldParticleColor    = new Color(1.00f, 0.85f, 0.20f, 1.0f);
-    [Range(2, 20)] public int    particlesPerSecond    = 8;
+    [Range(2, 100)] public int    particlesPerSecond    = 8;
     public Vector2 particleSizeRange     = new Vector2(6f, 24f);
     public Vector2 particleLifetimeRange = new Vector2(1.0f, 2.5f);
     public Vector2 particleSpeedRange    = new Vector2(50f, 150f);
@@ -80,6 +83,55 @@ public class InteractionVFXController : MonoBehaviour
     [Tooltip("Fixed time (seconds) for the despawn animation regardless of effect lifetime.")]
     [Range(0.05f, 1.0f)]
     public float touchDespawnDuration = 0.30f;
+
+    // ── Digital Glitch Grid Touch Effect ──────────────────────────────────────
+
+    public enum TouchEffectMode
+    {
+        LiquidGlassOnly,     // always use the Liquid Glass Anomaly shader
+        DigitalGlitchOnly,   // always use the Digital Glitch Grid shader
+        EtherealFluidOnly,   // always use the Ethereal Fluid Trail shader
+        RandomMix            // each spawn randomly picks from all assigned shaders
+    }
+
+    [Header("Touch Effect  —  Digital Glitch Grid")]
+    [Tooltip("Material using Custom/DigitalGlitchGrid shader.\n" +
+             "Create a Material from DigitalGlitchGrid.shader in the Project window\n" +
+             "and drag it here.")]
+    public Material digitalGlitchMaterial;
+
+    [Tooltip("Which touch-effect shader to use:\n" +
+             "  LiquidGlassOnly   — classic liquid-glass blob (original).\n" +
+             "  DigitalGlitchOnly — animated dot-grid / digital-glitch.\n" +
+             "  EtherealFluidOnly — flowing vertical drip-streak trails.\n" +
+             "  RandomMix         — each touch randomly picks from all assigned shaders.")]
+    public TouchEffectMode touchEffectMode = TouchEffectMode.LiquidGlassOnly;
+
+    [Tooltip("Per-instance ±variation added to _GridSize so no two Glitch effects\n" +
+             "look identical. 0 = all grids the same density.")]
+    [Range(0f, 20f)]
+    public float glitchGridVariation = 4f;
+
+    // ── Ethereal Fluid Trail Touch Effect ─────────────────────────────────────
+
+    [Header("Touch Effect  —  Ethereal Fluid Trail")]
+    [Tooltip("Material using Custom/EtherealFluidTrail shader.\n" +
+             "Create a Material from EtherealFluidTrail.shader in the Project window\n" +
+             "and drag it here.")]
+    public Material etherealFluidMaterial;
+
+    [Tooltip("Per-instance streak-length variation. 0 = all instances identical.")]
+    [Range(0f, 8f)]
+    public float etherealStreakVariation = 3f;
+
+    [Tooltip("Per-instance drip-density variation around the material default.")]
+    [Range(0f, 10f)]
+    public float etherealDensityVariation = 4f;
+
+    [Tooltip("Size of the Ethereal Fluid effect in screen pixels (width × height).\n" +
+             "Set independently from Touch Effect Pixel Size so you can make it\n" +
+             "smaller/larger without affecting the other two effects.")]
+    public Vector2 etherealPixelSize = new Vector2(260f, 260f);
 
     // ── Camera Shake ──────────────────────────────────────────────────────────
 
@@ -195,6 +247,9 @@ public class InteractionVFXController : MonoBehaviour
         public Vector2       velocity;
     }
 
+    /// <summary>Number of touch-glass effects currently alive on screen. Read by GroundingPrompt.</summary>
+    public int ActiveTouchCount => activeInstances.Count;
+
     private readonly List<TouchGlassInstance> activeInstances = new List<TouchGlassInstance>();
     private readonly List<StarParticle>       activeStars     = new List<StarParticle>();
     private readonly List<PulseRing>          activeRings     = new List<PulseRing>();
@@ -255,9 +310,20 @@ public class InteractionVFXController : MonoBehaviour
             groundingBorder.enabled    = false;
         }
 
-        if (liquidGlassMaterial == null)
+        if (liquidGlassMaterial == null &&
+            touchEffectMode == TouchEffectMode.LiquidGlassOnly)
             Debug.LogWarning("[VFX] Liquid Glass Material is NOT assigned! " +
                              "Drag 'LiquidGlassAnomaly_Mat' from _Shader/ onto this component.");
+
+        if (digitalGlitchMaterial == null &&
+            touchEffectMode == TouchEffectMode.DigitalGlitchOnly)
+            Debug.LogWarning("[VFX] Digital Glitch Material is NOT assigned! " +
+                             "Create a Material from DigitalGlitchGrid.shader and drag it here.");
+
+        if (etherealFluidMaterial == null &&
+            touchEffectMode == TouchEffectMode.EtherealFluidOnly)
+            Debug.LogWarning("[VFX] Ethereal Fluid Material is NOT assigned! " +
+                             "Create a Material from EtherealFluidTrail.shader and drag it here.");
 
         // Force shader compilation before the first blow so there's no hitch at runtime
         if (starGlowMaterial != null) StartCoroutine(WarmupStarShader());
@@ -358,6 +424,7 @@ public class InteractionVFXController : MonoBehaviour
         UpdateFloatParticles();
 
         if (blowInProgress) return;
+        if (dm != null && dm.IsInCooldown) return;
 
         int isTouching  = GetInputTouching();
         int isGrounding = GetInputGrounding();
@@ -406,6 +473,21 @@ public class InteractionVFXController : MonoBehaviour
         return _kbLevel;
     }
 
+    // ── Grounding lock ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// DistractionManager.requireGroundingPrompt が true のとき、
+    /// GroundingPrompt が一度でも表示されていなければ grounding を禁止する。
+    /// DistractionManager 側と同じ条件を VFX 状態機にも適用し、
+    /// 視覚的な pulse ring などが早期に再生されないようにする。
+    /// </summary>
+    bool IsGroundingUnlocked()
+    {
+        if (dm == null || !dm.requireGroundingPrompt) return true;
+        // 与 DistractionManager 保持一致：必须等 fade-in 完全结束才解锁。
+        return GroundingPrompt.Instance == null || GroundingPrompt.Instance.IsFullyShown;
+    }
+
     // ── State Machine ─────────────────────────────────────────────────────────
 
     void TickStateMachine(int isGrounding, int isBlowing, int level)
@@ -413,7 +495,8 @@ public class InteractionVFXController : MonoBehaviour
         switch (vfxState)
         {
             case VFXState.Normal:
-                if (isGrounding == 1) vfxState = VFXState.Grounding;
+                if (isGrounding == 1 && IsGroundingUnlocked())
+                    vfxState = VFXState.Grounding;
                 break;
 
             case VFXState.Grounding:
@@ -460,7 +543,13 @@ public class InteractionVFXController : MonoBehaviour
         bool isRisingEdge = touching && (prevIsTouching == 0);
         prevIsTouching    = isTouchingValue;
 
-        bool canSpawn = (vfxState != VFXState.Grounding);
+        // When the grounding prompt has triggered, freeze all existing effects
+        // in place and block new spawns. Effects will only be cleared when the
+        // user completes grounding and blows (BlowRoutine handles cleanup).
+        bool groundingFrozen = GroundingPrompt.Instance != null &&
+                               GroundingPrompt.Instance.HasTriggered;
+
+        bool canSpawn = (vfxState != VFXState.Grounding) && !groundingFrozen;
 
         if (isRisingEdge && canSpawn)
         {
@@ -486,7 +575,11 @@ public class InteractionVFXController : MonoBehaviour
         {
             TouchGlassInstance inst = activeInstances[i];
 
-            inst.elapsed += Time.deltaTime;
+            // Frozen: don't advance elapsed → effect holds at its current
+            // visual state and is never auto-despawned. BlowRoutine will
+            // clear it when the user completes grounding + blow.
+            if (!groundingFrozen)
+                inst.elapsed += Time.deltaTime;
 
             // Spawn-in and despawn always take fixed seconds; only the hold
             // period in the middle stretches with fadeTime. This prevents the
@@ -504,7 +597,8 @@ public class InteractionVFXController : MonoBehaviour
 
             inst.mat.SetFloat(s_SpawnProgressId, progress);
 
-            if (inst.elapsed >= inst.fadeTime)
+            // Only auto-despawn when not frozen
+            if (!groundingFrozen && inst.elapsed >= inst.fadeTime)
             {
                 inst.go.SetActive(false);
                 Destroy(inst.mat);
@@ -617,16 +711,47 @@ public class InteractionVFXController : MonoBehaviour
         });
     }
 
+    // Returns the source material to clone for a new touch-effect instance.
+    // Returns null if the required material(s) are unassigned.
+    Material PickTouchMaterial()
+    {
+        switch (touchEffectMode)
+        {
+            case TouchEffectMode.LiquidGlassOnly:    return liquidGlassMaterial;
+            case TouchEffectMode.DigitalGlitchOnly:  return digitalGlitchMaterial;
+            case TouchEffectMode.EtherealFluidOnly:  return etherealFluidMaterial;
+            default: // RandomMix — picks equally from all assigned materials
+            {
+                var pool = new System.Collections.Generic.List<Material>(3);
+                if (liquidGlassMaterial   != null) pool.Add(liquidGlassMaterial);
+                if (digitalGlitchMaterial != null) pool.Add(digitalGlitchMaterial);
+                if (etherealFluidMaterial != null) pool.Add(etherealFluidMaterial);
+                return pool.Count > 0 ? pool[Random.Range(0, pool.Count)] : null;
+            }
+        }
+    }
+
+    // Shader-type helpers — used to branch per-instance randomisation.
+    static bool IsGlitchShader(Material src) =>
+        src != null && src.shader != null && src.shader.name.Contains("DigitalGlitchGrid");
+
+    static bool IsEtherealShader(Material src) =>
+        src != null && src.shader != null && src.shader.name.Contains("EtherealFluidTrail");
+
     void SpawnTouchGlassInstance()
     {
-        if (liquidGlassMaterial == null) return;
+        Material sourceMat = PickTouchMaterial();
+        if (sourceMat == null) return;
 
         Camera cam = mainCamera != null ? mainCamera : Camera.main;
         if (cam == null) { Debug.LogWarning("[VFX] No camera found — cannot spawn touch glass."); return; }
 
+        bool isGlitch   = IsGlitchShader(sourceMat);
+        bool isEthereal = IsEtherealShader(sourceMat);
+
         // Build Quad
         GameObject go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        go.name = "TouchGlassEffect";
+        go.name = isGlitch ? "DigitalGlitchEffect" : isEthereal ? "EtherealFluidEffect" : "TouchGlassEffect";
         Destroy(go.GetComponent<MeshCollider>());
         go.transform.SetParent(cam.transform, false);
 
@@ -634,7 +759,7 @@ public class InteractionVFXController : MonoBehaviour
         mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         mr.receiveShadows    = false;
 
-        Material mat = new Material(liquidGlassMaterial);
+        Material mat = new Material(sourceMat);
         mr.material = mat;
 
         // Random position within padded viewport
@@ -655,8 +780,9 @@ public class InteractionVFXController : MonoBehaviour
             cam.ViewportToWorldPoint(new Vector3(0.5f, 0f, depth)),
             cam.ViewportToWorldPoint(new Vector3(0.5f, 1f, depth)));
 
-        float scaleX = (touchEffectPixelSize.x / Screen.width)  * worldW;
-        float scaleY = (touchEffectPixelSize.y / Screen.height) * worldH;
+        Vector2 pixelSize = isEthereal ? etherealPixelSize : touchEffectPixelSize;
+        float scaleX = (pixelSize.x / Screen.width)  * worldW;
+        float scaleY = (pixelSize.y / Screen.height) * worldH;
 
         go.transform.localPosition = localPos;
         go.transform.localRotation = Quaternion.identity;
@@ -666,43 +792,181 @@ public class InteractionVFXController : MonoBehaviour
         float fadeTime = (dm != null) ? dm.CurrentFadeTime : 1.5f;
 
         // ── Per-instance visual randomisation ─────────────────────────────────
-        // Shape seeds: always randomised so each blob has a unique silhouette
-        mat.SetFloat("_ShapeIrregularity", Random.Range(0.18f, 0.35f));
-        mat.SetFloat("_ShapeOffsetX",      Random.Range(0f, 100f));
-        mat.SetFloat("_ShapeOffsetY",      Random.Range(0f, 100f));
-        mat.SetFloat(s_RotationOffsetId,   Random.Range(0f, Mathf.PI * 2f));
 
-        if (syncTouchColors)
+        // Shared HDR colour palette (used by both shaders)
+        Color[] coreHues =
         {
-            // _TimeOffset = 0 aligns every instance's colour clock to _Time.y,
-            // so palT = frac(spatial + _Time.y * _ColorSpeed * 0.06) is identical
-            // across all blobs at the same moment → colours cycle in sync.
-            mat.SetFloat(s_TimeOffsetId,   0f);
-            mat.SetFloat("_IriOffset",     0f);
-            mat.SetColor("_CoreColor",     syncCoreColor);
-            mat.SetFloat("_IriIntensity",  3.0f);
-            mat.SetFloat("_TendrilGlow",   3.0f);
-            mat.SetFloat("_CoreEmission",  15f);
-        }
-        else
+            new Color(3.0f, 0.4f, 0.1f, 1f),
+            new Color(0.1f, 2.5f, 0.5f, 1f),
+            new Color(0.4f, 0.1f, 3.0f, 1f),
+            new Color(2.8f, 0.1f, 1.2f, 1f),
+            new Color(0.1f, 2.0f, 3.0f, 1f),
+            new Color(3.0f, 2.2f, 0.1f, 1f),
+            new Color(0.1f, 0.8f, 2.8f, 1f),
+            new Color(2.5f, 0.1f, 0.5f, 1f),
+        };
+
+        if (!isGlitch && !isEthereal)
         {
-            mat.SetFloat(s_TimeOffsetId,   Random.Range(0f, 100f));
-            mat.SetFloat("_IriOffset",     Random.value);
-            Color[] coreHues =
+            // ── LiquidGlass-specific: shape seeds ──────────────────────────────
+            mat.SetFloat("_ShapeIrregularity", Random.Range(0.18f, 0.35f));
+            mat.SetFloat("_ShapeOffsetX",      Random.Range(0f, 100f));
+            mat.SetFloat("_ShapeOffsetY",      Random.Range(0f, 100f));
+            mat.SetFloat(s_RotationOffsetId,   Random.Range(0f, Mathf.PI * 2f));
+
+            if (syncTouchColors)
             {
-                new Color(3.0f, 0.4f, 0.1f, 1f),
-                new Color(0.1f, 2.5f, 0.5f, 1f),
-                new Color(0.4f, 0.1f, 3.0f, 1f),
-                new Color(2.8f, 0.1f, 1.2f, 1f),
-                new Color(0.1f, 2.0f, 3.0f, 1f),
-                new Color(3.0f, 2.2f, 0.1f, 1f),
-                new Color(0.1f, 0.8f, 2.8f, 1f),
-                new Color(2.5f, 0.1f, 0.5f, 1f),
-            };
-            mat.SetColor("_CoreColor",     coreHues[Random.Range(0, coreHues.Length)]);
-            mat.SetFloat("_IriIntensity",  Random.Range(1.8f, 4.5f));
-            mat.SetFloat("_TendrilGlow",   Random.Range(1.2f, 4.5f));
-            mat.SetFloat("_CoreEmission",  Random.Range(8f,  22f));
+                mat.SetFloat(s_TimeOffsetId,  0f);
+                mat.SetFloat("_IriOffset",    0f);
+                mat.SetColor("_CoreColor",    syncCoreColor);
+                mat.SetFloat("_IriIntensity", 3.0f);
+                mat.SetFloat("_TendrilGlow",  3.0f);
+                mat.SetFloat("_CoreEmission", 15f);
+            }
+            else
+            {
+                mat.SetFloat(s_TimeOffsetId,  Random.Range(0f, 100f));
+                mat.SetFloat("_IriOffset",    Random.value);
+                mat.SetColor("_CoreColor",    coreHues[Random.Range(0, coreHues.Length)]);
+                mat.SetFloat("_IriIntensity", Random.Range(1.8f, 4.5f));
+                mat.SetFloat("_TendrilGlow",  Random.Range(1.2f, 4.5f));
+                mat.SetFloat("_CoreEmission", Random.Range(8f,  22f));
+            }
+        }
+        else if (isGlitch)
+        {
+            // ── DigitalGlitch-specific: grid + glitch seeds ────────────────────
+            float baseGrid = mat.GetFloat("_GridSize");
+            float gridVar  = Mathf.Max(0f, glitchGridVariation);
+            mat.SetFloat("_GridSize",  Mathf.Clamp(baseGrid + Random.Range(-gridVar, gridVar), 6f, 80f));
+
+            mat.SetFloat("_GlitchAmt",       Random.Range(0.01f, 0.06f));
+            mat.SetFloat("_DotDrift",        Random.Range(0.05f, 0.18f));
+            mat.SetFloat("_DotDriftSpeed",   Random.Range(0.5f,  1.8f));
+            mat.SetFloat("_FlickerSpeed",    Random.Range(5f,   16f));
+
+            if (syncTouchColors)
+            {
+                mat.SetFloat(s_TimeOffsetId,  0f);
+                mat.SetFloat("_IriOffset",    0f);
+                mat.SetColor("_CoreColor",    syncCoreColor);
+                mat.SetFloat("_IriIntensity", 3.0f);
+                mat.SetFloat("_CoreEmission", 10f);
+            }
+            else
+            {
+                mat.SetFloat(s_TimeOffsetId,  Random.Range(0f, 100f));
+                mat.SetFloat("_IriOffset",    Random.value);
+                mat.SetColor("_CoreColor",    coreHues[Random.Range(0, coreHues.Length)]);
+                mat.SetFloat("_IriIntensity", Random.Range(1.5f, 4.0f));
+                mat.SetFloat("_CoreEmission", Random.Range(5f,  15f));
+            }
+
+            // Randomly pick from four shape archetypes (sharp box SDF)
+            float sW, sH, skew, taper;
+            switch (Random.Range(0, 4))
+            {
+                case 0: // wide horizontal strip
+                    sW = Random.Range(0.28f, 0.44f); sH = Random.Range(0.08f, 0.22f);
+                    skew = Random.Range(-0.10f, 0.10f); taper = 0f; break;
+                case 1: // tall vertical slab
+                    sW = Random.Range(0.08f, 0.22f); sH = Random.Range(0.28f, 0.44f);
+                    skew = Random.Range(-0.10f, 0.10f); taper = 0f; break;
+                case 2: // parallelogram
+                    sW = Random.Range(0.18f, 0.36f); sH = Random.Range(0.16f, 0.34f);
+                    skew = Random.Range(0.20f, 0.55f) * (Random.value < 0.5f ? 1f : -1f); taper = 0f; break;
+                default: // trapezoid
+                    sW = Random.Range(0.20f, 0.38f); sH = Random.Range(0.16f, 0.32f);
+                    skew = Random.Range(-0.08f, 0.08f);
+                    taper = Random.Range(0.25f, 0.70f) * (Random.value < 0.5f ? 1f : -1f); break;
+            }
+            mat.SetFloat("_ShapeW",         sW);
+            mat.SetFloat("_ShapeH",         sH);
+            mat.SetFloat("_ShapeSkewX",     skew);
+            mat.SetFloat("_ShapeTaper",     taper);
+            mat.SetFloat("_ShapeRoundness", 0f);
+        }
+        else // isEthereal
+        {
+            // ── EtherealFluidTrail-specific: streak + density seeds ────────────
+            // Streak length: each instance has a different trail length so some
+            // drips leave short bright flashes, others leave long luminous trails.
+            float baseStreak  = mat.GetFloat("_StreakLength");
+            float streakVar   = Mathf.Max(0f, etherealStreakVariation);
+            mat.SetFloat("_StreakLength",
+                Mathf.Clamp(baseStreak + Random.Range(-streakVar, streakVar), 1f, 20f));
+
+            // Density: denser grids look like fine rain, sparser like thick glowing rivers.
+            float baseDens   = mat.GetFloat("_DripDensity");
+            float densVar    = Mathf.Max(0f, etherealDensityVariation);
+            mat.SetFloat("_DripDensity",
+                Mathf.Clamp(baseDens + Random.Range(-densVar, densVar), 4f, 30f));
+
+            // Per-instance flow & diffusion variation
+            mat.SetFloat("_DripSpeed",          Random.Range(0.45f, 1.30f));
+            mat.SetFloat("_FlickerSpeed",       Random.Range(0.55f, 1.80f));
+            mat.SetFloat("_DiffusionIntensity", Random.Range(0.30f, 0.75f));
+            mat.SetFloat("_GlowWidth",          Random.Range(2.00f, 5.50f));
+
+            if (syncTouchColors)
+            {
+                mat.SetFloat(s_TimeOffsetId, 0f);
+                mat.SetFloat("_IriOffset",   0f);
+                mat.SetColor("_CoreColor",   syncCoreColor);
+            }
+            else
+            {
+                mat.SetFloat(s_TimeOffsetId, Random.Range(0f, 100f));
+                mat.SetFloat("_IriOffset",   Random.value);
+                mat.SetColor("_CoreColor",   coreHues[Random.Range(0, coreHues.Length)]);
+            }
+
+            // Random silhouette — 5 archetypes, each biased toward the
+            // vertical-streak visual but with varied proportions and edges.
+            float eW, eH, eSkew, eTaper, eRound;
+            switch (Random.Range(0, 5))
+            {
+                case 0: // tall oval (classic drip shape)
+                    eW     = Random.Range(0.24f, 0.38f);
+                    eH     = Random.Range(0.36f, 0.44f);
+                    eSkew  = 0f;
+                    eTaper = 0f;
+                    eRound = 1.0f;
+                    break;
+                case 1: // tall sharp rectangle (vertical slab)
+                    eW     = Random.Range(0.18f, 0.34f);
+                    eH     = Random.Range(0.32f, 0.44f);
+                    eSkew  = 0f;
+                    eTaper = 0f;
+                    eRound = 0.0f;
+                    break;
+                case 2: // wide landscape rectangle
+                    eW     = Random.Range(0.30f, 0.44f);
+                    eH     = Random.Range(0.14f, 0.26f);
+                    eSkew  = Random.Range(-0.08f, 0.08f);
+                    eTaper = 0f;
+                    eRound = 0.0f;
+                    break;
+                case 3: // parallelogram (slanted slab — drips look like falling diagonally)
+                    eW     = Random.Range(0.20f, 0.36f);
+                    eH     = Random.Range(0.28f, 0.42f);
+                    eSkew  = Random.Range(0.18f, 0.50f) * (Random.value < 0.5f ? 1f : -1f);
+                    eTaper = 0f;
+                    eRound = 0.0f;
+                    break;
+                default: // trapezoid (wider at top or bottom — teardrop / wedge)
+                    eW     = Random.Range(0.22f, 0.38f);
+                    eH     = Random.Range(0.28f, 0.42f);
+                    eSkew  = Random.Range(-0.06f, 0.06f);
+                    eTaper = Random.Range(0.20f, 0.55f) * (Random.value < 0.5f ? 1f : -1f);
+                    eRound = 0.0f;
+                    break;
+            }
+            mat.SetFloat("_ShapeW",         eW);
+            mat.SetFloat("_ShapeH",         eH);
+            mat.SetFloat("_ShapeSkewX",     eSkew);
+            mat.SetFloat("_ShapeTaper",     eTaper);
+            mat.SetFloat("_ShapeRoundness", eRound);
         }
         // ─────────────────────────────────────────────────────────────────────
 
@@ -732,11 +996,15 @@ public class InteractionVFXController : MonoBehaviour
     {
         if (vfxState == VFXState.Grounding && !blowInProgress)
         {
-            float interval   = groundingDuration > 0f ? groundingDuration / 5f : 1f;
-            // +1 so the first ring spawns immediately (timer > 0), not after 1 s.
-            // When timer == 0 (fully reset) shouldHave = 0, which clears ringsSpawned.
+            // 每隔 1/ringsPerSecond 秒生成一个圈，总数 = groundingDuration × ringsPerSecond。
+            // +1 让第一个圈在 timer > 0 时立刻出现，而不是等满一个间隔。
+            float safeRate   = Mathf.Max(0.01f, ringsPerSecond);
+            float interval   = 1f / safeRate;
+            int   maxRings   = groundingDuration > 0f
+                                   ? Mathf.Max(1, Mathf.RoundToInt(groundingDuration * safeRate))
+                                   : 1;
             int shouldHave = groundingTimer > 0f
-                ? Mathf.Clamp(Mathf.FloorToInt(groundingTimer / interval) + 1, 0, 5)
+                ? Mathf.Clamp(Mathf.FloorToInt(groundingTimer / interval) + 1, 0, maxRings)
                 : 0;
             if (shouldHave < ringsSpawned) ringsSpawned = shouldHave;
             while (ringsSpawned < shouldHave) { SpawnPulseRing(); ringsSpawned++; }
@@ -1059,18 +1327,23 @@ public class InteractionVFXController : MonoBehaviour
         if (!showDebugOverlay) return;
 
         GUI.color = new Color(0f, 0f, 0f, 0.55f);
-        GUI.DrawTexture(new Rect(8f, 8f, 280f, 230f), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(8f, 8f, 280f, 284f), Texture2D.whiteTexture);
         GUI.color = Color.white;
 
         float y = 14f;
-        string hwStatus  = hw  != null ? "OK" : "NULL  ← check scene";
-        string dmStatus  = dm  != null ? "OK" : "NULL";
-        string matStatus = liquidGlassMaterial != null ? "assigned" : "MISSING  ← drag mat here!";
+        string hwStatus       = hw  != null ? "OK" : "NULL  ← check scene";
+        string dmStatus       = dm  != null ? "OK" : "NULL";
+        string glassStatus    = liquidGlassMaterial   != null ? "assigned" : "MISSING";
+        string glitchStatus   = digitalGlitchMaterial != null ? "assigned" : "MISSING";
+        string etherealStatus = etherealFluidMaterial != null ? "assigned" : "MISSING";
 
         GUI.Label(new Rect(14f, y, 270f, 20f), "[VFXController]"); y += 20f;
         GUI.Label(new Rect(14f, y, 270f, 20f), $"DeviceInputManager : {hwStatus}"); y += 18f;
         GUI.Label(new Rect(14f, y, 270f, 20f), $"DistractionManager : {dmStatus}"); y += 18f;
-        GUI.Label(new Rect(14f, y, 270f, 20f), $"LiquidGlassMaterial: {matStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"LiquidGlass Mat    : {glassStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"DigitalGlitch Mat  : {glitchStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"EtherealFluid Mat  : {etherealStatus}"); y += 18f;
+        GUI.Label(new Rect(14f, y, 270f, 20f), $"Touch Effect Mode  : {touchEffectMode}"); y += 18f;
         GUI.Label(new Rect(14f, y, 270f, 20f), $"Active instances   : {activeInstances.Count}"); y += 18f;
 
         int touch = GetInputTouching();
@@ -1108,12 +1381,26 @@ public class InteractionVFXController : MonoBehaviour
 
     Canvas FindOrCreateCanvas()
     {
+        // 必须使用专属的 "VFXCanvas"，而不是随便找一个 ScreenSpaceOverlay Canvas。
+        //
+        // 原因：InstructionDisplay 和 GroundingPrompt 的 Canvas 使用了
+        // ScaleWithScreenSize（参考分辨率 1920×1080），导致 Canvas 内部坐标单位
+        // ≠ 屏幕像素。本脚本里 SpawnPulseRing / SpawnFloatParticle /
+        // SetupBorderGlow 等地方都直接用 Screen.width / Screen.height
+        // 作为 Canvas 坐标值，必须保证 Canvas 是 ConstantPixelSize（scale=1）
+        // 才能 1:1 对应屏幕像素，否则圆圈/粒子尺寸错误，边缘会被屏幕裁切。
         foreach (Canvas c in FindObjectsByType<Canvas>(FindObjectsSortMode.None))
-            if (c.renderMode == RenderMode.ScreenSpaceOverlay) return c;
+            if (c.renderMode == RenderMode.ScreenSpaceOverlay &&
+                c.targetDisplay == 0 &&
+                c.name == "VFXCanvas")
+                return c;
 
-        GameObject go = new GameObject("VFXCanvas");
-        Canvas canvas = go.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        GameObject go    = new GameObject("VFXCanvas");
+        Canvas canvas    = go.AddComponent<Canvas>();
+        canvas.renderMode    = RenderMode.ScreenSpaceOverlay;
+        canvas.targetDisplay = 0;
+        // 默认 CanvasScaler = ConstantPixelSize + scaleFactor 1，
+        // 与本脚本中所有 Screen.width/height 尺寸计算保持 1:1 对应。
         go.AddComponent<CanvasScaler>();
         go.AddComponent<GraphicRaycaster>();
         return canvas;
@@ -1324,8 +1611,10 @@ public class InteractionVFXController : MonoBehaviour
         DestroyAllInstances();
     }
 
-    void HardReset()
+    public void HardReset()
     {
+        StopAllCoroutines();
+
         foreach (StarParticle star in activeStars)
         {
             if (star.mat != null) Destroy(star.mat);

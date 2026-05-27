@@ -1,0 +1,61 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: DigitalGlitchGrid_Mat
+  m_Shader: {fileID: 4800000, guid: 736c5b2a573b37140b0a65462363d729, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _BlowFade: 1
+    - _BorderWidth: 0.01
+    - _ChromaAmt: 0
+    - _CoreEmission: 4
+    - _DotDrift: 0.3
+    - _DotDriftSpeed: 3.15
+    - _DotRadius: 0.252
+    - _EdgeSoftness: 0.098
+    - _FlareHLength: 0.18
+    - _FlareIntensity: 3.8
+    - _FlarePower: 2
+    - _FlareVWidth: 0.023
+    - _FlickerSpeed: 9
+    - _GlitchAmt: 0.03
+    - _GlitchDensity: 6
+    - _GridSize: 43.2
+    - _IriIntensity: 1.29
+    - _IriOffset: 0.284
+    - _IriSpeed: 1.41
+    - _MosaicBlockSize: 0.005
+    - _Opacity: 0.95
+    - _ScanStrength: 0.18
+    - _ShapeH: 0.44
+    - _ShapeRoundness: 1
+    - _ShapeSkewX: 0.39
+    - _ShapeTaper: 0.62
+    - _ShapeW: 0.44
+    - _SpawnProgress: 0
+    - _TimeOffset: 0
+    m_Colors:
+    - _CoreColor: {r: 0.1, g: 2, b: 3.5, a: 1}
+    - _GlowColor: {r: 0, g: 1, b: 2.5, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
