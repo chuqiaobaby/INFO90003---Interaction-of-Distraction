@@ -12,7 +12,7 @@
  */
 
 // Uncomment to see sound sensor values for calibration
-//#define DEBUG_SOUND
+#define DEBUG_SOUND
 
 #include <FastLED.h>
 
@@ -21,7 +21,7 @@
 #define BRIGHTNESS      100
 
 #define TOUCH_PIN       4
-#define TOUCH_THRESHOLD 350
+#define TOUCH_THRESHOLD 320
 
 CRGB leds[NUM_LEDS];
 
@@ -212,10 +212,10 @@ bool cooldownFinished = (currentTime - lastMotorStopTime >= MOTOR_COOLDOWN);
 if (isBlowing == 1 && !motorActive && cooldownFinished) {
 
     digitalWrite(motorDIR, LOW);
-    analogWrite(motorPWM, 255);
+    analogWrite(motorPWM, 200);
 
     digitalWrite(motor2DIR, LOW);
-    analogWrite(motor2PWM, 150);
+    analogWrite(motor2PWM, 110);
 
     motorStartTime = currentTime;
     motorActive = true;
@@ -338,25 +338,25 @@ previousBlowState = isBlowing;
     Serial.print(" Motor Activity: ");
     Serial.println(motorActive);*/
 
-    /*Serial.print("Left LDR:");
+    Serial.print("Left LDR:");
     Serial.print(leftValue);
-    Serial.print("Right LDR:");
-    Serial.println(rightValue);*/
+    Serial.print(" Right LDR:");
+    Serial.println(rightValue);
 
-    /*Serial.print("Touch Value:");
-    Serial.println(touchValue);*/
+    Serial.print("Touch Value:");
+    Serial.println(touchValue);
 
-    /*Serial.print("Low: ");
+    Serial.print("Low: ");
     Serial.print(analogRead(sensorLow));
     Serial.print(" Mid: ");
     Serial.print(analogRead(sensorMid));
     Serial.print(" High: ");
-    Serial.println(analogRead(sensorHigh));*/
+    Serial.println(analogRead(sensorHigh));
 
-    /*Serial.print("Motor Active:");
+    Serial.print("Motor Active:");
     Serial.println(motorActive);
     Serial.print("Motor Cooldown: ");
-    Serial.println(cooldownFinished);*/
+    Serial.println(cooldownFinished);
 
 
     //Serial.println(rawSound);
