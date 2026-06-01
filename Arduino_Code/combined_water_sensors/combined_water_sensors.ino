@@ -21,7 +21,7 @@
 #define BRIGHTNESS      100
 
 #define TOUCH_PIN       4
-#define TOUCH_THRESHOLD 350
+#define TOUCH_THRESHOLD 360
 
 CRGB leds[NUM_LEDS];
 
@@ -54,7 +54,7 @@ int pulseDirection = 1;
 // ====== GROUNDING SENSORS (LDRs) ======
 const int ldrLeft  = 39;
 const int ldrRight = 36;
-const int DARK_THRESHOLD = 160;  // Calibrate as needed to esnure LDRs are covered
+const int DARK_THRESHOLD = 30;  // Calibrate as needed to esnure LDRs are covered
 
 // ================= MOTOR =================
 const int motorDIR = 12; 
@@ -64,7 +64,7 @@ const int motor2DIR = 33;
 const int motor2PWM = 27;
 
 // Motor State
-const unsigned int MOTOR_RUNTIME = 10000;
+const unsigned int MOTOR_RUNTIME = 1500;
 unsigned long motorStartTime = 0;
 bool motorActive = false;
 
@@ -104,7 +104,7 @@ const unsigned long TOUCH_DEBOUNCE_MS = 200;
 unsigned long blowStartTime = 0;
 bool blowDetected = false;
 
-const unsigned long MOTOR_COOLDOWN = 15000; // 15 seconds
+const unsigned long MOTOR_COOLDOWN = 5000; // 5 seconds
 unsigned long lastMotorStopTime = 0;
 
 void setup() {
@@ -211,11 +211,11 @@ bool cooldownFinished = (currentTime - lastMotorStopTime >= MOTOR_COOLDOWN);
 
 if (isBlowing == 1 && !motorActive && cooldownFinished) {
 
-    digitalWrite(motorDIR, LOW);
+    digitalWrite(motorDIR, HIGH);
     analogWrite(motorPWM, 255);
 
     digitalWrite(motor2DIR, LOW);
-    analogWrite(motor2PWM, 150);
+    analogWrite(motor2PWM, 120);
 
     motorStartTime = currentTime;
     motorActive = true;
@@ -343,8 +343,8 @@ previousBlowState = isBlowing;
     Serial.print("Right LDR:");
     Serial.println(rightValue);*/
 
-    /*Serial.print("Touch Value:");
-    Serial.println(touchValue);*/
+    Serial.print("Touch Value:");
+    Serial.println(touchValue);
 
     /*Serial.print("Low: ");
     Serial.print(analogRead(sensorLow));
