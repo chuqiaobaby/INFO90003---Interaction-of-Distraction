@@ -366,6 +366,27 @@ public class GroundingPrompt : MonoBehaviour
         if (d2Group != null) StartCoroutine(FadeTo(d2Group, 0f, fadeOutDuration));
     }
 
+    public void ForceResetPromptState()
+    {
+        StopAllCoroutines();
+        promptTriggered = false;
+        isFullyShown    = false;
+        wasExpStarted   = false;
+        triggeredBy     = "—";
+
+        if (d1Group != null)
+        {
+            d1Group.alpha = 0f;
+            d1Group.blocksRaycasts = false;
+        }
+
+        if (d2Group != null)
+        {
+            d2Group.alpha = 0f;
+            d2Group.blocksRaycasts = false;
+        }
+    }
+
     // ── Coroutines ────────────────────────────────────────────────────────────────
 
     private IEnumerator FadeTo(CanvasGroup group, float target, float duration,

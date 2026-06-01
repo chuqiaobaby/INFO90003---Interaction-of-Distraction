@@ -43,6 +43,7 @@ public class DeviceInputManager : MonoBehaviour
 
     [Header("Debug")]
     [SerializeField] private bool showDebugOverlay = false;
+    [SerializeField] private bool logSerialLines = false;
 
     [Header("Current Values  (Read Only)")]
     public int Level      = 0;
@@ -60,6 +61,11 @@ public class DeviceInputManager : MonoBehaviour
     private volatile int _stageTouching;
     private volatile int _stageGrounding;
     private volatile int _stageBlowing;
+    private volatile int _validSerialLineCount;
+    private volatile int _invalidSerialLineCount;
+    private volatile int _drainedSerialLineCount;
+    private long _lastSerialLineUtcTicks;
+    private string _lastSerialLine = "";
 
     // Track whether hardware mode was active so we can react to runtime toggling
     private bool _wasHardwareActive;
@@ -150,8 +156,17 @@ public class DeviceInputManager : MonoBehaviour
         if (_running) return;
         try
         {
-            _serial = new SerialPort(portName, baudRate) { ReadTimeout = 200 };
+            ResetSerialState();
+
+            _serial = new SerialPort(portName, baudRate)
+            {
+                ReadTimeout = 50,
+                NewLine = "\n"
+            };
             _serial.Open();
+            _serial.DiscardInBuffer();
+            _serial.DiscardOutBuffer();
+
             _running    = true;
             _readThread = new Thread(ReadLoop) { IsBackground = true };
             _readThread.Start();
@@ -169,12 +184,49 @@ public class DeviceInputManager : MonoBehaviour
     private void StopSerial()
     {
         _running = false;
+
         if (_readThread != null && _readThread.IsAlive)
             _readThread.Join(500);
-        if (_serial != null && _serial.IsOpen)
-            _serial.Close();
+
+        if (_serial != null)
+        {
+            try
+            {
+                if (_serial.IsOpen)
+                {
+                    _serial.DiscardInBuffer();
+                    _serial.DiscardOutBuffer();
+                    _serial.Close();
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[DeviceInputManager] Error while closing serial port: {e.Message}");
+            }
+            finally
+            {
+                _serial.Dispose();
+            }
+        }
+
         _serial     = null;
         _readThread = null;
+    }
+
+    private void ResetSerialState()
+    {
+        _stageLevel = 0;
+        _stageTouching = 0;
+        _stageGrounding = 0;
+        _stageBlowing = 0;
+        _prevStageBlowing = 0;
+        _blowFramesLeft = 0;
+        _blowCooldownTimer = 0f;
+        _validSerialLineCount = 0;
+        _invalidSerialLineCount = 0;
+        _drainedSerialLineCount = 0;
+        Interlocked.Exchange(ref _lastSerialLineUtcTicks, 0L);
+        _lastSerialLine = "";
     }
 
     // ── Background read loop ──────────────────────────────────────────
@@ -184,8 +236,29 @@ public class DeviceInputManager : MonoBehaviour
         {
             try
             {
-                string raw = _serial.ReadLine();
-                ParseLine(raw.Trim());
+                string latest = _serial.ReadLine();
+
+                // If Unity ever falls behind, skip stale buffered packets and keep
+                // only the newest complete sensor state. This prevents multi-second
+                // touch latency from old serial lines being replayed one by one.
+                int drainedThisTick = 0;
+                while (_serial.BytesToRead > 0 && drainedThisTick < 32)
+                {
+                    try
+                    {
+                        latest = _serial.ReadLine();
+                        drainedThisTick++;
+                    }
+                    catch (TimeoutException)
+                    {
+                        break;
+                    }
+                }
+
+                if (drainedThisTick > 0)
+                    _drainedSerialLineCount += drainedThisTick;
+
+                ParseLine(latest.Trim());
             }
             catch (TimeoutException)
             {
@@ -203,20 +276,43 @@ public class DeviceInputManager : MonoBehaviour
     // Matches combined_water_sensors.ino Serial.println output
     private void ParseLine(string line)
     {
+        if (string.IsNullOrWhiteSpace(line)) return;
+
         string[] parts = line.Split(',');
-        if (parts.Length != 4) return;
+        if (parts.Length != 4)
+        {
+            _invalidSerialLineCount++;
+            return;
+        }
 
-        if (int.TryParse(parts[0].Trim(), out int lv))
-            _stageLevel = lv < 0 ? 0 : (lv > 3 ? 3 : lv);
+        int lv = 0;
+        int tc = 0;
+        int gr = 0;
+        int bl = 0;
 
-        if (int.TryParse(parts[1].Trim(), out int tc))
-            _stageTouching = tc;
+        bool ok =
+            int.TryParse(parts[0].Trim(), out lv) &
+            int.TryParse(parts[1].Trim(), out tc) &
+            int.TryParse(parts[2].Trim(), out gr) &
+            int.TryParse(parts[3].Trim(), out bl);
 
-        if (int.TryParse(parts[2].Trim(), out int gr))
-            _stageGrounding = gr;
+        if (!ok)
+        {
+            _invalidSerialLineCount++;
+            return;
+        }
 
-        if (int.TryParse(parts[3].Trim(), out int bl))
-            _stageBlowing = bl;
+        _stageLevel = lv < 0 ? 0 : (lv > 3 ? 3 : lv);
+        _stageTouching = tc != 0 ? 1 : 0;
+        _stageGrounding = gr != 0 ? 1 : 0;
+        _stageBlowing = bl != 0 ? 1 : 0;
+
+        _validSerialLineCount++;
+        Interlocked.Exchange(ref _lastSerialLineUtcTicks, DateTime.UtcNow.Ticks);
+        _lastSerialLine = line;
+
+        if (logSerialLines)
+            Debug.Log($"[DeviceInputManager] Serial latest: {line}");
     }
 
     // ── Debug overlay ─────────────────────────────────────────────────
@@ -228,13 +324,23 @@ public class DeviceInputManager : MonoBehaviour
             ? (_running ? $"Hardware  {portName}" : $"Hardware  {portName}  (ERROR — check Console)")
             : "Keyboard";
 
-        GUI.Label(new Rect(10f, 10f, 320f, 20f), $"[DeviceInputManager]  {source}");
-        GUI.Label(new Rect(10f, 30f, 320f, 20f), $"Level:       {Level}");
-        GUI.Label(new Rect(10f, 50f, 320f, 20f), $"isTouching:  {isTouching}");
-        GUI.Label(new Rect(10f, 70f, 320f, 20f), $"isGrounding: {isGrounding}");
-        GUI.Label(new Rect(10f, 90f, 320f, 20f), $"isBlowing:   {isBlowing}");
+        GUI.Label(new Rect(10f, 10f, 520f, 20f), $"[DeviceInputManager]  {source}");
+        GUI.Label(new Rect(10f, 30f, 520f, 20f), $"Level:       {Level}");
+        GUI.Label(new Rect(10f, 50f, 520f, 20f), $"isTouching:  {isTouching}");
+        GUI.Label(new Rect(10f, 70f, 520f, 20f), $"isGrounding: {isGrounding}");
+        GUI.Label(new Rect(10f, 90f, 520f, 20f), $"isBlowing:   {isBlowing}");
         if (useHardwareInput && _blowCooldownTimer > 0f)
-            GUI.Label(new Rect(10f, 110f, 320f, 20f), $"Blow cooldown: {_blowCooldownTimer:F1}s");
+            GUI.Label(new Rect(10f, 110f, 520f, 20f), $"Blow cooldown: {_blowCooldownTimer:F1}s");
+        if (useHardwareInput)
+        {
+            long lastTicks = Interlocked.Read(ref _lastSerialLineUtcTicks);
+            double age = lastTicks > 0L
+                ? (DateTime.UtcNow.Ticks - lastTicks) / (double)TimeSpan.TicksPerSecond
+                : -1f;
+            GUI.Label(new Rect(10f, 130f, 520f, 20f), $"Serial valid/invalid/drained: {_validSerialLineCount}/{_invalidSerialLineCount}/{_drainedSerialLineCount}");
+            GUI.Label(new Rect(10f, 150f, 520f, 20f), $"Last line age: {(age >= 0f ? age.ToString("F2") : "—")}s");
+            GUI.Label(new Rect(10f, 170f, 520f, 20f), $"Last line: {_lastSerialLine}");
+        }
     }
 
     private void OnDestroy() => StopSerial();

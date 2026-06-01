@@ -170,7 +170,68 @@ MonoBehaviour:
   requestedWidth: 1280
   requestedHeight: 720
   requestedFps: 30
-  forceFlipY: 0
+  forceFlipY: 1
+--- !u!1 &165944443
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 165944445}
+  - component: {fileID: 165944444}
+  m_Layer: 0
+  m_Name: EndingManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &165944444
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 165944443}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9c1012b54da64dae8894ec1a79c288a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::EndingPrompt
+  triggerOnCooldown: 1
+  triggerDelay: 1
+  displayIndex: 0
+  sortingOrder: 260
+  promptText: You have returned to stillness.
+  font: {fileID: 11400000, guid: 77a21d785cb19af439cd344eb02dcd34, type: 2}
+  fontSize: 42
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  fontStyle: 1
+  lineSpacing: 4
+  textCenterY: 0.5
+  textHeight: 0.24
+  textSidePadding: 0.12
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.21960784}
+  fadeInDuration: 1
+  holdDuration: 4
+  fadeOutDuration: 1
+--- !u!4 &165944445
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 165944443}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &260361347
 GameObject:
   m_ObjectHideFlags: 0
@@ -215,11 +276,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e4be12bfe94fcd94bba65ce72a5f8f02, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DeviceInputManager
-  useHardwareInput: 0
-  portName: COM3
+  useHardwareInput: 1
+  portName: /dev/cu.usbserial-56E40389571
   baudRate: 115200
   blowCooldownSeconds: 2
   showDebugOverlay: 0
+  logSerialLines: 0
   Level: 0
   isTouching: 0
   isGrounding: 0
@@ -253,8 +315,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 453f197cffe732f40a084ed76f5882c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GroundingPrompt
-  touchCountThreshold: 10
-  timerThreshold: 20
+  touchCountThreshold: 30
+  timerThreshold: 60
   display1Index: 0
   display1Image: {fileID: 21300000, guid: 9c6e1c9b24784e84e8f68a393bf68656, type: 3}
   display1ImageTint: {r: 1, g: 1, b: 1, a: 1}
@@ -629,7 +691,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BGMController
   audioSource: {fileID: 0}
-  targetVolume: 0.7
+  targetVolume: 0.96
   fadeInDuration: 2
   fadeOutDuration: 3
 --- !u!82 &426963792
@@ -643,7 +705,7 @@ AudioSource:
   serializedVersion: 4
   OutputAudioMixerGroup: {fileID: 0}
   m_audioClip: {fileID: 0}
-  m_Resource: {fileID: 8300000, guid: 778230f1a3920734fb417edbbb02adce, type: 3}
+  m_Resource: {fileID: 8300000, guid: a584bda69c4cc4b8aaddc97dc104a8f1, type: 3}
   m_PlayOnAwake: 0
   m_Volume: 1
   m_Pitch: 1
@@ -777,24 +839,24 @@ MonoBehaviour:
   groundingBorder: {fileID: 0}
   vfxGroup: {fileID: 0}
   mainCamera: {fileID: 0}
-  ringColor: {r: 0.58679235, g: 1, b: 0.919155, a: 0.85}
+  ringColor: {r: 1, g: 0.9155508, b: 0.4764151, a: 0.972549}
   ringExpandDuration: 1.44
   ringThickness: 0.02
   ringsPerSecond: 0.5
-  borderGlowColor: {r: 1, g: 1, b: 1, a: 0.81960785}
+  borderGlowColor: {r: 1, g: 0.996489, b: 0.8915094, a: 0.81960785}
   borderPulseSpeed: 2.5
   borderGlowFraction: 0.17
-  shieldParticleColor: {r: 1, g: 1, b: 1, a: 1}
+  shieldParticleColor: {r: 1, g: 0.9949282, b: 0.8915094, a: 1}
   particlesPerSecond: 60
   particleSizeRange: {x: 4.54, y: 8.54}
   particleLifetimeRange: {x: 1, y: 2.5}
   particleSpeedRange: {x: 50, y: 150}
   liquidGlassMaterial: {fileID: 2100000, guid: c2e747ce29dc632478f4ef2120022b20, type: 2}
-  touchEffectPixelSize: {x: 500, y: 500}
+  touchEffectPixelSize: {x: 800, y: 800}
   touchEffectDepth: 2
   touchEffectPadding: 0.055
   touchGlassMaxOpacity: 0.95
-  touchRepeatInterval: 0.5
+  touchRepeatInterval: 0.25
   syncTouchColors: 0
   syncCoreColor: {r: 0.1, g: 2, b: 3, a: 1}
   touchSpawnDuration: 0.521
@@ -878,28 +940,10 @@ MonoBehaviour:
       inWeight: 0
       outWeight: 0
     - serializedVersion: 3
-      time: 0.87720877
-      value: 0.22990909
-      inSlope: 0.72530276
-      outSlope: 0.72530276
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.18845743
-      outWeight: 1
-    - serializedVersion: 3
-      time: 0.98209405
-      value: 0.5700313
-      inSlope: 6.7033296
-      outSlope: 6.7033296
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.4938961
-      outWeight: 1
-    - serializedVersion: 3
       time: 1
       value: 1
-      inSlope: 0
-      outSlope: 0
+      inSlope: 2
+      outSlope: 2
       tangentMode: 0
       weightedMode: 0
       inWeight: 0
@@ -970,7 +1014,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::InstructionDisplay
   targetDisplay: 0
-  overlayColor: {r: 0.6981132, g: 0.6203987, b: 0.6203987, a: 0.18039216}
+  overlayColor: {r: 0.09803922, g: 0.09803922, b: 0.4392157, a: 0.28235295}
   titleText: Welcome to Ephemeral Focus
   titleFont: {fileID: 11400000, guid: 77a21d785cb19af439cd344eb02dcd34, type: 2}
   titleFontSize: 105
@@ -983,7 +1027,7 @@ MonoBehaviour:
     represent the constant stimuli around us.\nYou may gently place them into the
     water and feel the change.\n\nImmerse your hands to begin the journey of losing
     focus and healing yourself."
-  bodyFont: {fileID: 11400000, guid: 77a21d785cb19af439cd344eb02dcd34, type: 2}
+  bodyFont: {fileID: 11400000, guid: c54876b06100a8b4c8ec421f7aa26198, type: 2}
   bodyFontSize: 52
   bodyColor: {r: 0.92, g: 0.92, b: 0.92, a: 1}
   bodyStyle: 1
@@ -1109,7 +1153,7 @@ MonoBehaviour:
   mistAlphaPower: 2.31
   mistFlowColorA: {r: 0.78431374, g: 0.41960785, b: 1, a: 1}
   mistFlowColorB: {r: 1, g: 0.56078434, b: 0.9372549, a: 1}
-  enableShakeWaveBurst: 0
+  enableShakeWaveBurst: 1
   shakeWaveResourcePath: ShakeWaveI/Prefebs/shake_wave_1
   shakeWaveScale: 3.49
   shakeWaveLifetime: 2.8
@@ -1166,8 +1210,8 @@ MonoBehaviour:
   mediaPipeExternalCameraOrdinal: 0
   useHandTrackingPosition: 1
   useMediaPipeHandTracking: 1
-  mediaPipeHandVisibleTriggersRipple: 1
-  useMousePositionWhenHandMissing: 1
+  mediaPipeHandVisibleTriggersRipple: 0
+  useMousePositionWhenHandMissing: 0
   repeatRippleWhileTouching: 0
   handTrackingRotatePosition180: 0
   handTrackingFlipX: 0
@@ -1418,7 +1462,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.595345, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.61384, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1482,16 +1526,61 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 76c79c6f737bc804390d00845f9231de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SFXController
-  waterLevel1Clip: {fileID: 8300000, guid: 036a63ed9893d814f89453a6e0495b0d, type: 3}
-  waterLevel1Volume: 1
-  waterLevel2Clip: {fileID: 8300000, guid: 036a63ed9893d814f89453a6e0495b0d, type: 3}
-  waterLevel2Volume: 1
-  waterLevel3Clip: {fileID: 8300000, guid: 036a63ed9893d814f89453a6e0495b0d, type: 3}
+  touchEffectClips:
+  - clip: {fileID: 8300000, guid: bb942a26b5d6f5340a20ae587f2e65c7, type: 3}
+    volume: 0.644
+  - clip: {fileID: 8300000, guid: 211fc10f6ee5048e0bd027d6186d92e4, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: 372a543bfdc7244bab3614223693a63f, type: 3}
+    volume: 0.712
+  - clip: {fileID: 8300000, guid: 4e4d93f2323fc47108ba5b3b93251ef8, type: 3}
+    volume: 0.39
+  - clip: {fileID: 8300000, guid: 78a20e55bdd184f5db914094c8ad6ca3, type: 3}
+    volume: 0.288
+  - clip: {fileID: 8300000, guid: fa397aa09f2e34a35b555344a4c1a0aa, type: 3}
+    volume: 0.449
+  - clip: {fileID: 8300000, guid: d3fec9d8ff0094305abe5629c252ef92, type: 3}
+    volume: 0.822
+  - clip: {fileID: 8300000, guid: ae28278ad2e9d4dfd8fda6b631c91c42, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: e0edd29f006a1465089d2e003d9147b4, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: dcfda9bc661334e2293c871d2e035523, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: 372a543bfdc7244bab3614223693a63f, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: fc8b9cee8159740eaad052f9a9c324f4, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: 55a8b5686853441bfb924779e6685f28, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: 31046e7deb49042288677da2361af48d, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: 5a5b3249eddff40f2aea0ab944c48642, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: adb0fce4ffb1c46c19c4994b7efdc9d8, type: 3}
+    volume: 1
+  - clip: {fileID: 8300000, guid: bb8e9913687f34d66b55a58ee09031a6, type: 3}
+    volume: 1
+  touchEffectVolume: 0.54
+  touchEffectFadeOutDuration: 0.75
+  waterLevel1Clip: {fileID: 8300000, guid: 20233b9f63312484a831a15d741406f3, type: 3}
+  waterLevel1Volume: 0.328
+  waterLevel2Clip: {fileID: 8300000, guid: 7fcaaf441ca4f4086864c3b43673434e, type: 3}
+  waterLevel2Volume: 0.146
+  waterLevel3Clip: {fileID: 8300000, guid: 2e4d3665d7ecd4acaa60209e13242fb8, type: 3}
   waterLevel3Volume: 1
-  groundingClip: {fileID: 0}
-  groundingVolume: 1
-  blowClearClip: {fileID: 8300000, guid: 8e1d851f634394b4b8e14dd9cab9137f, type: 3}
+  groundingClips:
+  - {fileID: 8300000, guid: 1fea1ae693f544ff4b5f42fb253000ba, type: 3}
+  - {fileID: 8300000, guid: c77d462a3b5ee402b86a19ce5dd3d92a, type: 3}
+  - {fileID: 8300000, guid: fdda52c70ab664d9a9dfea8ae801956a, type: 3}
+  groundingVolume: 1.99
+  blowPromptClip: {fileID: 8300000, guid: 8543fd12a34c54f8d9887e10958629f0, type: 3}
+  blowPromptVolume: 0.533
+  blowClearClip: {fileID: 8300000, guid: 74ccbcf3722d64f98b5e5af384d8d71e, type: 3}
   blowClearVolume: 1
+  blowClearClip2: {fileID: 8300000, guid: ce42d806933024500a786588fc798363, type: 3}
+  blowClearVolume2: 0.591
+  blowClearFadeOutDuration: 3.17
 --- !u!82 &1028278063
 AudioSource:
   m_ObjectHideFlags: 0
@@ -1893,7 +1982,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 50}
-  m_LocalScale: {x: 102.595345, y: 57.735027, z: 1}
+  m_LocalScale: {x: 102.61384, y: 57.735027, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 330585546}
@@ -1991,6 +2080,128 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2105082034
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2105082036}
+  - component: {fileID: 2105082035}
+  m_Layer: 0
+  m_Name: Counter
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2105082035
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2105082034}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10b57418e5e7d46cf8fc7768cdbf2cb4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TouchEffectCountDebugOverlay
+  showOverlay: 0
+  displayIndex: 0
+  sortingOrder: 500
+  anchorX: 0.02
+  anchorY: 0.93
+  width: 360
+  height: 54
+  font: {fileID: 0}
+  fontSize: 28
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  backgroundColor: {r: 0, g: 0, b: 0, a: 0.55}
+--- !u!4 &2105082036
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2105082034}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0, y: -0, z: -0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2112493458
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2112493460}
+  - component: {fileID: 2112493459}
+  m_Layer: 0
+  m_Name: ProgressInstructionManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &2112493459
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2112493458}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e245848dd932406c866465544289fd2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TouchEffectCountPrompt
+  thresholds:
+  - touchEffectCount: 10
+    text: Does your mind feel a little scattered?
+    audioClip: {fileID: 8300000, guid: 17714364b3fde48639980249ee0bc33e, type: 3}
+    audioVolume: 1.38
+    triggered: 0
+  - touchEffectCount: 20
+    text: Are you feeling overwhelmed?
+    audioClip: {fileID: 8300000, guid: 6b791a913d7cc419cbae2f131450bcd6, type: 3}
+    audioVolume: 1.46
+    triggered: 0
+  displayIndex: 0
+  font: {fileID: 11400000, guid: c54876b06100a8b4c8ec421f7aa26198, type: 2}
+  fontSize: 42
+  textColor: {r: 1, g: 1, b: 1, a: 1}
+  fontStyle: 1
+  textCenterY: 0.58
+  textHeight: 0.18
+  textSidePadding: 0.1
+  overlayColor: {r: 0, g: 0, b: 0, a: 0.48235294}
+  fadeInDuration: 0.8
+  holdDuration: 4
+  fadeOutDuration: 0.8
+--- !u!4 &2112493460
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2112493458}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: -0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2006,7 +2217,10 @@ SceneRoots:
   - {fileID: 536995484}
   - {fileID: 765055270}
   - {fileID: 606987052}
+  - {fileID: 2112493460}
   - {fileID: 268702590}
   - {fileID: 1558297019}
+  - {fileID: 165944445}
   - {fileID: 426963790}
   - {fileID: 1028278061}
+  - {fileID: 2105082036}

@@ -216,6 +216,8 @@ public class InteractionVFXController : MonoBehaviour
         public float      alpha;
         public float      fadeTime;
         public float      elapsed;
+        public AudioSource sfxSource;
+        public bool       sfxFadeStarted;
     }
 
     private class StarParticle
@@ -597,9 +599,13 @@ public class InteractionVFXController : MonoBehaviour
 
             inst.mat.SetFloat(s_SpawnProgressId, progress);
 
+            if (!groundingFrozen && inst.elapsed >= spawnDur + holdDur)
+                FadeOutTouchEffectSound(inst, despawnDur);
+
             // Only auto-despawn when not frozen
             if (!groundingFrozen && inst.elapsed >= inst.fadeTime)
             {
+                FadeOutTouchEffectSound(inst);
                 inst.go.SetActive(false);
                 Destroy(inst.mat);
                 Destroy(inst.go);
@@ -974,13 +980,19 @@ public class InteractionVFXController : MonoBehaviour
         mat.SetFloat("_Opacity", touchGlassMaxOpacity);
         go.SetActive(true);
 
+        AudioSource touchSfx = SFXController.Instance != null
+            ? SFXController.Instance.StartTouchEffect()
+            : null;
+
         activeInstances.Add(new TouchGlassInstance
         {
             go       = go,
             mat      = mat,
             alpha    = touchGlassMaxOpacity,   // retained for BlowRoutine
             fadeTime = fadeTime,
-            elapsed  = 0f
+            elapsed  = 0f,
+            sfxSource = touchSfx,
+            sfxFadeStarted = false
         });
 
     }
@@ -1008,10 +1020,13 @@ public class InteractionVFXController : MonoBehaviour
                 : 0;
             if (shouldHave < ringsSpawned) ringsSpawned = shouldHave;
             while (ringsSpawned < shouldHave) { SpawnPulseRing(); ringsSpawned++; }
+
+            SetTouchEffectSoundDucking(maxRings > 0 ? ringsSpawned / (float)maxRings : 0f);
         }
         else if (vfxState == VFXState.Normal)
         {
             ringsSpawned = 0;
+            SetTouchEffectSoundDucking(0f);
         }
 
         for (int i = activeRings.Count - 1; i >= 0; i--)
@@ -1045,6 +1060,9 @@ public class InteractionVFXController : MonoBehaviour
     void SpawnPulseRing()
     {
         if (vfxGroup == null) return;
+
+        if (SFXController.Instance != null)
+            SFXController.Instance.PlayGroundingPulse();
 
         float diag     = Mathf.Sqrt(Screen.width * (float)Screen.width + Screen.height * (float)Screen.height);
         Color flashCol = Color.Lerp(Color.white, ringColor, 0.15f); // near-white flash
@@ -1225,6 +1243,7 @@ public class InteractionVFXController : MonoBehaviour
         vfxState          = VFXState.Shielded;
         groundingTimer    = groundingDuration;
         shieldedFadeTimer = 0f;
+        SetTouchEffectSoundDucking(1f);
         if (mainCamera != null) mainCamera.transform.localPosition = camOrigin;
         for (int i = 0; i < 5; i++) SpawnFloatParticle();
     }
@@ -1254,6 +1273,9 @@ public class InteractionVFXController : MonoBehaviour
             foreach (TouchGlassInstance inst in instances)
                 spawnQ.Enqueue(inst);
 
+        foreach (TouchGlassInstance inst in instances)
+            FadeOutTouchEffectSound(inst, blowTransitionDuration);
+
         // ── Phase 1+2 combined: glass fades out WHILE stars simultaneously appear ──
         // Use _BlowFade (1→0) instead of _SpawnProgress so effects that are still
         // spawning-in don't flash to full visibility before fading out.
@@ -1277,7 +1299,10 @@ public class InteractionVFXController : MonoBehaviour
         }
 
         foreach (TouchGlassInstance inst in instances)
+        {
+            FadeOutTouchEffectSound(inst);
             if (inst.go != null) inst.go.SetActive(false);
+        }
 
         // ── Phase 3: fade UI out ──────────────────────────────────────────────────
 
@@ -1373,10 +1398,30 @@ public class InteractionVFXController : MonoBehaviour
     {
         foreach (TouchGlassInstance inst in activeInstances)
         {
+            FadeOutTouchEffectSound(inst);
             if (inst.mat != null) Destroy(inst.mat);
             if (inst.go  != null) Destroy(inst.go);
         }
         activeInstances.Clear();
+    }
+
+    void FadeOutTouchEffectSound(TouchGlassInstance inst, float duration = -1f)
+    {
+        if (inst == null || inst.sfxSource == null) return;
+        if (inst.sfxFadeStarted) return;
+        inst.sfxFadeStarted = true;
+
+        if (SFXController.Instance != null)
+            SFXController.Instance.FadeOutTouchEffect(inst.sfxSource, duration);
+        else
+            Destroy(inst.sfxSource.gameObject);
+        inst.sfxSource = null;
+    }
+
+    void SetTouchEffectSoundDucking(float amount)
+    {
+        if (SFXController.Instance != null)
+            SFXController.Instance.SetTouchEffectGroundingDucking(amount);
     }
 
     Canvas FindOrCreateCanvas()
@@ -1638,6 +1683,7 @@ public class InteractionVFXController : MonoBehaviour
         prevIsTouching    = 0;
         _touchRepeatTimer = 0f;
 
+        SetTouchEffectSoundDucking(0f);
         ResetUI();
 
         if (mainCamera != null) mainCamera.transform.localPosition = camOrigin;

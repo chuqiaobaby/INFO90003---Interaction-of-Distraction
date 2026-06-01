@@ -154,6 +154,18 @@ public class DistractionManager : MonoBehaviour
         cooldownTimer = 0f;
         ClearAllEffects();
 
+        if (GroundingPrompt.Instance != null)
+            GroundingPrompt.Instance.ForceResetPromptState();
+
+        if (BlowPrompt.Instance != null)
+            BlowPrompt.Instance.HidePrompt();
+
+        TouchEffectCountPrompt touchCountPrompt = FindObjectOfType<TouchEffectCountPrompt>();
+        if (touchCountPrompt != null) touchCountPrompt.ForceResetPromptState();
+
+        EndingPrompt endingPrompt = FindObjectOfType<EndingPrompt>();
+        if (endingPrompt != null) endingPrompt.HidePrompt();
+
         InteractionVFXController vfx = FindObjectOfType<InteractionVFXController>();
         if (vfx != null) vfx.HardReset();
 

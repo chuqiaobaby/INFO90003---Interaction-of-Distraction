@@ -126,6 +126,8 @@ public class BlowPrompt : MonoBehaviour
     public void ShowPrompt()
     {
         StopAllCoroutines();
+        if (SFXController.Instance != null)
+            SFXController.Instance.PlayBlowPrompt();
         if (group != null) StartCoroutine(FadeTo(group, 1f, fadeInDuration));
     }
 
